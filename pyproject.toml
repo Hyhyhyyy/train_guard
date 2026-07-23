@@ -1,0 +1,45 @@
+[build-system]
+requires = ["setuptools>=61"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "train-guard"
+version = "0.3.0"
+description = "Read-only LLM/VLM fine-tuning quality toolkit (single-file deployable)"
+readme = "README.md"
+license = { text = "Apache-2.0" }
+requires-python = ">=3.10"
+authors = [
+  { name = "Train Guard Contributors" }
+]
+keywords = ["training", "monitor", "llm", "vlm", "readonly", "lora"]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "License :: OSI Approved :: Apache Software License",
+  "Operating System :: POSIX :: Linux",
+  "Operating System :: Microsoft :: Windows",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.10",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
+]
+dependencies = []
+
+[project.optional-dependencies]
+yaml = ["PyYAML>=6.0"]
+image = ["Pillow>=9.0"]
+psutil = ["psutil>=5.9"]
+all = ["PyYAML>=6.0", "Pillow>=9.0", "psutil>=5.9"]
+
+[project.scripts]
+train-guard = "train_guard.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/example/train-guard"
+Documentation = "https://github.com/example/train-guard#readme"
+
+[tool.setuptools.packages.find]
+where = ["src"]

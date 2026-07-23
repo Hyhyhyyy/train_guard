@@ -1,0 +1,60 @@
+# Sensitive and runtime-only trees
+private/
+reports/
+
+# Python caches and test output
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.coverage
+.coverage.*
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+.tox/
+.nox/
+
+# Local environments and package output
+.venv/
+venv/
+env/
+build/
+dist/
+*.egg-info/
+
+# Runtime databases, logs, and temporary files
+*.sqlite*
+*.log
+*.tmp
+*.temp
+*.swp
+*.swo
+*.bak
+*.orig
+*~
+.cache/
+tmp/
+temp/
+
+# IDE and OS metadata
+.idea/
+.vscode/
+.vs/
+*.code-workspace
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# Local models, datasets, checkpoints, and training output
+models/
+model/
+data/
+datasets/
+checkpoints/
+outputs/
+saves/
+wandb/
+runs/
+
+# release/ is intentionally NOT ignored: it is the controlled candidate tree.

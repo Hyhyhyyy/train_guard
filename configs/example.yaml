@@ -1,0 +1,32 @@
+# Train Guard example config (YAML needs PyYAML; JSON also supported)
+# Priority: CLI > this file > defaults
+
+doctor:
+  model_path: null
+  expected_gpus: 3
+
+data:
+  check:
+    sample_limit: 1000          # avoid scanning huge corpora by default
+    full_scan: false
+    compute_hash: false
+    verify_images: true         # skipped automatically if Pillow missing
+    messages_field: messages
+    images_field: images
+    group_id_field: group_id
+    split_field: split
+    answer_field: answer
+
+run:
+  watch:
+    interval: 30
+    framework: llamafactory     # generic | huggingface | llamafactory
+    expected_gpu_count: 3
+    stale_log_minutes: 15
+    disk_free_gb_threshold: 10.0
+
+eval:
+  prediction_field: prediction
+  reference_field: reference
+  group_id_field: group_id
+  keywords: []

@@ -1,0 +1,17 @@
+# LLaMAFactory watch example (Train Guard)
+# Does not modify LLaMAFactory itself.
+
+run:
+  watch:
+    framework: llamafactory
+    interval: 10
+    once: false
+    output_dir: ./saves/demo/lora
+    log_file: ./train.log
+    expected_gpu_count: 3
+    stale_log_minutes: 20
+    disk_free_gb_threshold: 20.0
+
+doctor:
+  model_path: ./models/example-model
+  expected_gpus: 3
