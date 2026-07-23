@@ -11,7 +11,7 @@ from .base import FieldMap
 
 
 class GenericDatasetAdapter:
-    """Supports JSON array, JSONL, messages/images and input/output schemas."""
+    """Domain-neutral JSON/JSONL adapter with no framework inheritance."""
 
     name = "generic"
 
@@ -72,8 +72,10 @@ class GenericDatasetAdapter:
     def extract_media_refs(self, record: Mapping[str, Any]) -> List[MediaRef]:
         """Extract image/media paths."""
         raw = None
-        field = self.fields.images
-        for key in (self.fields.images, self.fields.media, "image", "image_path", "file_name"):
+        field = self.fields.media
+        # ``images`` remains a read-only compatibility input, while ``media``
+        # is the public configuration field.
+        for key in (self.fields.media, "images", "image", "image_path", "file_name"):
             if key in record:
                 raw = record[key]
                 field = key
@@ -109,14 +111,14 @@ class GenericDatasetAdapter:
         return None
 
     def extract_messages_or_io(self, record: Mapping[str, Any]) -> MessagesOrIO:
-        """Extract messages or input/output/answer."""
+        """Extract messages or generic input/output."""
         messages = record.get(self.fields.messages)
         if isinstance(messages, list):
             return MessagesOrIO(messages=[m for m in messages if isinstance(m, dict)])
         inp = record.get(self.fields.input_field)
         out = record.get(self.fields.output_field)
-        if out is None and self.fields.answer in record:
-            out = record.get(self.fields.answer)
+        if out is None and "answer" in record:  # compatibility input only
+            out = record.get("answer")
         return MessagesOrIO(
             input_text=None if inp is None else str(inp),
             output_text=None if out is None else str(out),

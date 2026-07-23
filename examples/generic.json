@@ -12,29 +12,23 @@
       "full_scan": false,
       "compute_hash": false,
       "verify_images": true,
+      "group_id": "group_id",
       "messages": "messages",
       "media": "media",
-      "group_id": "group_id",
       "split": "split",
       "report_dir": "./reports/data_check"
     }
   },
   "run": {
     "watch": {
-      "interval": 30,
-      "once": true,
       "framework": "generic",
+      "once": true,
+      "interval": 30,
       "output_dir": "./outputs",
       "log_file": "./outputs/train.log",
       "expected_gpus": null,
-      "stale_log_minutes": 15,
+      "stale_log_minutes": 15.0,
       "disk_free_gb_threshold": 10.0
     }
-  },
-  "eval": {
-    "predictions": "./outputs/predictions.jsonl",
-    "references": "./data/references.jsonl",
-    "group_id": "group_id",
-    "keywords": []
   }
 }

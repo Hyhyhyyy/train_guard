@@ -29,7 +29,7 @@ class MediaRef:
     """Reference to a media file path (relative or absolute)."""
 
     path: str
-    field: str = "images"
+    field: str = "media"
 
 
 @dataclass

@@ -178,7 +178,7 @@ class TestPrivacyAndReports(unittest.TestCase):
 
 class TestVersion(unittest.TestCase):
     def test_version(self) -> None:
-        self.assertTrue(tg.__version__.startswith("0.3"))
+        self.assertTrue(tg.__version__.startswith("0.4"))
 
 
 @unittest.skipUnless(False, "NCCL smoke is optional; covered by examples script when GPUs exist")

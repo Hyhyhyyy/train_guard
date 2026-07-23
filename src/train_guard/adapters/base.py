@@ -14,7 +14,6 @@ class FieldMap:
     """Configurable field names for datasets."""
 
     messages: str = "messages"
-    images: str = "images"
     media: str = "media"
     input_field: str = "input"
     output_field: str = "output"
@@ -22,7 +21,6 @@ class FieldMap:
     split: str = "split"
     prediction: str = "prediction"
     reference: str = "reference"
-    answer: str = "answer"
 
 
 @dataclass

@@ -1,0 +1,19 @@
+{
+  "schema_version": 1,
+  "doctor": {
+    "model_path": "./models/example-model",
+    "expected_gpus": null
+  },
+  "run": {
+    "watch": {
+      "framework": "huggingface",
+      "once": true,
+      "interval": 30,
+      "output_dir": "./outputs",
+      "log_file": "./outputs/train.log",
+      "expected_gpus": null,
+      "stale_log_minutes": 15.0,
+      "disk_free_gb_threshold": 10.0
+    }
+  }
+}

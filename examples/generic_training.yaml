@@ -1,32 +1,34 @@
 # Generic training watch / data example (Train Guard)
 
+schema_version: 1
+
 run:
   watch:
     framework: generic
     interval: 30
     output_dir: ./outputs
     log_file: ./outputs/train.log
-    expected_gpu_count: 1
+    expected_gpus: 1
     stale_log_minutes: 15
     disk_free_gb_threshold: 10.0
 
 data:
   check:
-    data_root: ./data/images
+    data_root: ./data/media
     annotation: ./data/train.jsonl
     sample_limit: 500
     compute_hash: false
     verify_images: true
-    images_field: images
-    answer_field: answer
-    group_id_field: group_id
-    split_field: split
+    media: media
+    messages: messages
+    group_id: group_id
+    split: split
+    report_dir: ./reports/data_check
 
 eval:
   predictions: ./outputs/predictions.jsonl
   references: ./data/references.jsonl
-  prediction_field: prediction
-  reference_field: reference
+  group_id: group_id
   keywords:
     - triangle
     - blue
