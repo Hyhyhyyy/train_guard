@@ -8,12 +8,12 @@ import secrets
 import time
 from dataclasses import dataclass, field
 from typing import Any, Mapping
+from urllib.parse import urlparse
 
 CONTROL_ACTIONS = frozenset(
     {
         "pause",
         "resume",
-        "checkpoint",
         "graceful_stop",
         "terminate",
         "validated_restart",
@@ -41,7 +41,8 @@ class ControlRequest:
         now: float | None = None,
         command_id: str | None = None,
     ) -> "ControlRequest":
-        if not run_id.strip():
+        normalized_run_id = run_id.strip()
+        if not normalized_run_id:
             raise ValueError("run_id is required")
         if action not in CONTROL_ACTIONS:
             raise ValueError(f"unsupported control action: {action}")
@@ -50,7 +51,7 @@ class ControlRequest:
         created_at = time.time() if now is None else now
         return cls(
             command_id=command_id or secrets.token_hex(16),
-            run_id=run_id,
+            run_id=normalized_run_id,
             action=action,
             created_at=created_at,
             expires_at=created_at + ttl_seconds,
@@ -99,13 +100,24 @@ def bearer_token(header: str | None) -> str:
 def origin_is_local(origin: str | None, host: str, port: int) -> bool:
     if not origin:
         return False
-    allowed = {
-        f"http://{host}:{port}",
-        f"http://127.0.0.1:{port}",
-        f"http://localhost:{port}",
-        f"http://[::1]:{port}",
-    }
-    return origin.rstrip("/") in allowed
+    parsed = urlparse(origin)
+    allowed_hosts = {host.lower(), "127.0.0.1", "localhost", "::1"}
+    try:
+        parsed_port = parsed.port
+    except ValueError:
+        return False
+    return (
+        parsed.scheme == "http"
+        and parsed.hostname is not None
+        and parsed.hostname.lower() in allowed_hosts
+        and parsed_port == port
+        and not parsed.username
+        and not parsed.password
+        and parsed.path in {"", "/"}
+        and not parsed.params
+        and not parsed.query
+        and not parsed.fragment
+    )
 
 
 __all__ = [

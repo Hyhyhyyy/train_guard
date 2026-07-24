@@ -65,7 +65,6 @@ def run_tui(
             Binding("q", "quit", "Quit"),
             Binding("p", "control('pause')", "Pause"),
             Binding("r", "control('resume')", "Resume"),
-            Binding("c", "control('checkpoint')", "Checkpoint"),
             Binding("s", "control('graceful_stop')", "Stop"),
             Binding("x", "control('terminate')", "Terminate"),
             Binding("v", "control('validated_restart')", "Restart"),

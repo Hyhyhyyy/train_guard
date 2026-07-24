@@ -12,6 +12,7 @@ import pytest
 
 from train_guard.control import ControlRequest, ControlToken, bearer_token, origin_is_local
 from train_guard.dashboard import create_server
+from train_guard.dashboard.assets import JS
 from train_guard.state import StateStore
 from train_guard.status import build_status_snapshot
 from train_guard.supervisor import ProcessSpec, SupervisionResult, supervise
@@ -21,14 +22,14 @@ from train_guard.tui import render_terminal_snapshot
 def test_control_request_token_and_origin_contract() -> None:
     request = ControlRequest.create(
         "run-1",
-        "checkpoint",
+        "validated_restart",
         now=10,
         ttl_seconds=5,
         command_id="command-1",
     )
     assert not request.expired(14.9)
     assert request.expired(15)
-    assert request.to_dict()["action"] == "checkpoint"
+    assert request.to_dict()["action"] == "validated_restart"
     with pytest.raises(ValueError, match="unsupported"):
         ControlRequest.create("run-1", "shell")
 
@@ -76,6 +77,14 @@ def test_shared_status_and_plain_tui_fallback(tmp_path: Path) -> None:
         }
     )
     assert "[WARNING] step_stall" in alert_text
+
+
+def test_dashboard_javascript_escapes_values_and_normalizes_gpu_payload() -> None:
+    assert "replace(/[&<>\"']/g" in JS
+    assert "Array.isArray(gpuPayload?.gpus)" in JS
+    actions = JS.split("const actions=", 1)[1].split(";", 1)[0]
+    assert "checkpoint" not in actions
+    assert "validated_restart" in actions
 
 
 def test_dashboard_assets_status_and_read_only_control(tmp_path: Path) -> None:
@@ -195,7 +204,7 @@ def test_control_queue_is_managed_idempotent_and_expires(tmp_path: Path) -> None
             store.enqueue_control(request)
         store.register_managed_process("run-1", 123, "running", ("terminate", "pause"))
         with pytest.raises(ValueError, match="unavailable"):
-            store.enqueue_control(ControlRequest.create("run-1", "checkpoint"))
+            store.enqueue_control(ControlRequest.create("run-1", "resume"))
         assert store.enqueue_control(request)
         assert not store.enqueue_control(request)
         claimed = store.claim_control("run-1", 11)

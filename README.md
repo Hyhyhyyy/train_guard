@@ -67,6 +67,8 @@ For a source checkout use `python train_guard.py ...`; for the release asset use
 ## Interfaces and recovery
 
 - **CLI:** the supported interface; see [docs/CLI.md](docs/CLI.md).
+- **Unified launch:** `train-guard run launch` runs preflight, supervised training, live reliability
+  collection, bounded recovery, post-training checks, and manifest generation with one run ID.
 - **Web:** `train-guard show --state-db PATH` serves metrics, GPU state, alerts,
   checkpoints, recovery history, and managed-process status on loopback only.
 - **TUI:** `train-guard tui --state-db PATH` provides the same persistent status over SSH.
@@ -74,6 +76,19 @@ For a source checkout use `python train_guard.py ...`; for the release asset use
 - **Controlled recovery:** `run supervise` can restart only an explicit argv, only when
   `--restart` is supplied, only after checkpoint validation, and within a finite budget.
   It never executes a shell string. See [docs/RELIABILITY.md](docs/RELIABILITY.md).
+
+The recommended entry point for a new run is:
+
+```bash
+train-guard run launch --output-dir ./outputs/run-1 --framework huggingface \
+  --expected-steps 100 -- python train.py --output_dir ./outputs/run-1
+```
+
+It writes `train_guard_run_summary.json` plus doctor, watcher, audit, post-check, manifest,
+and SQLite state artifacts. Add `--strict-preflight` only when an environment FAIL must prevent
+training from starting. Framework-specific resume arguments remain part of the training argv.
+
+For supervision without the full workflow:
 
 ```bash
 train-guard run supervise --restart --max-restarts 1 \
@@ -86,13 +101,17 @@ The training argv itself must include its framework-specific resume option.
 
 Control is disabled by default. Start a supervised run with `--enable-control`, then start
 the Web dashboard with the same state database and `--enable-control`. The dashboard prints
-an in-memory token once and accepts only allowlisted actions for that supervised process:
+an in-memory token once and accepts only capabilities advertised by that supervised process:
 
 ```bash
 train-guard run supervise --enable-control --state-db ./guard.sqlite \
   -- python train.py
 train-guard show --enable-control --state-db ./guard.sqlite
 ```
+
+Supported controls are pause, resume, graceful stop, terminate, and validated restart. Checkpoint
+creation remains framework-specific and is not exposed as a generic control action. Automatic
+restart attempts and outcomes appear in the same recovery history as manual control requests.
 
 The dashboard rejects non-loopback clients, non-local origins, expired commands, duplicate
 command IDs, unmanaged processes, and unsupported capabilities. Do not proxy it publicly.

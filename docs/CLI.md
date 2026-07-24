@@ -10,6 +10,7 @@ configuration through `--config` where shown by help.
 - `data check`: validate annotations, messages, media containment, and cross-split groups.
 - `data inventory`: stream field and media summaries.
 - `data compare`: compare two annotation files.
+- `run launch`: execute preflight, monitored supervision, recovery, post-check, and manifest generation as one workflow.
 - `run watch`: continuously observe logs, GPU state, checkpoints, and reliability rules.
 - `run snapshot`: collect one watcher sample.
 - `run check`: determine whether output evidence supports completion.

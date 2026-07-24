@@ -360,6 +360,11 @@ def _cmd_run_watch_loop(cfg: Dict[str, Any]) -> int:
             state["seen_checkpoints"] = [str(value) for value in persisted_checkpoints]
     once = bool(cfg.get("once"))
     interval = max(1, int(cfg.get("interval") or 30))
+    stop_event = cfg.get("_stop_event")
+
+    def stop_requested() -> bool:
+        return _SHUTDOWN or bool(stop_event is not None and stop_event.is_set())
+
     exit_code = EXIT_OK
     last_step: Optional[int] = None
     last_checkpoints: List[str] = []
@@ -502,13 +507,17 @@ def _cmd_run_watch_loop(cfg: Dict[str, Any]) -> int:
                     exit_code = max(exit_code, EXIT_FAIL)
                 elif event.severity.value == "warning":
                     exit_code = max(exit_code, EXIT_WARN)
-            if once or _SHUTDOWN:
+            if once or stop_requested():
                 break
-            for _ in range(interval):
-                if _SHUTDOWN:
+            if stop_event is not None:
+                if stop_event.wait(interval):
                     break
-                time.sleep(1)
-            if _SHUTDOWN:
+            else:
+                for _ in range(interval):
+                    if stop_requested():
+                        break
+                    time.sleep(1)
+            if stop_requested():
                 break
     except Exception as exc:  # noqa: BLE001
         LOGGER.error("Watch failed: %s", exc)

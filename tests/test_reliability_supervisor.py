@@ -14,6 +14,7 @@ from train_guard.supervisor import (
     RecoveryPolicy,
     supervise,
 )
+from train_guard.state import StateStore
 
 
 class SupervisorTests(unittest.TestCase):
@@ -54,6 +55,38 @@ class SupervisorTests(unittest.TestCase):
             )
             self.assertEqual(result.exit_code, 0)
             self.assertEqual(result.restart_count, 1)
+
+    def test_automatic_restart_records_attempt_and_success(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            root = Path(temporary)
+            checkpoint = root / "checkpoint"
+            checkpoint.mkdir()
+            (checkpoint / "state.json").write_text("{}", encoding="utf-8")
+            marker = root / "attempted"
+            code = (
+                "from pathlib import Path; import sys; "
+                f"p=Path({str(marker)!r}); "
+                "exists=p.exists(); p.write_text('1'); sys.exit(0 if exists else 7)"
+            )
+            with StateStore(root / "state.sqlite") as store:
+                result = supervise(
+                    ProcessSpec(sys.executable, ("-c", code)),
+                    restart_enabled=True,
+                    recovery_guard=RecoveryGuard(RecoveryPolicy(max_restarts=1, window_seconds=60)),
+                    checkpoint_path=checkpoint,
+                    checkpoint_validator=FileCheckpointValidator(["state.json"]),
+                    run_id="run-1",
+                    control_store=store,
+                )
+                history = list(store.recovery_history("run-1"))
+            self.assertEqual(result.exit_code, 0)
+            self.assertEqual(
+                [(item["action"], item["status"]) for item in reversed(history)],
+                [
+                    ("automatic_restart", "attempted"),
+                    ("automatic_restart", "succeeded"),
+                ],
+            )
 
 
 if __name__ == "__main__":

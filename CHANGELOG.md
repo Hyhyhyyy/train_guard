@@ -19,6 +19,9 @@
   audit, checksums, CycloneDX SBOM, and GitHub prerelease assets.
 - Add an authenticated, audited, capability-gated control queue limited to supervised
   processes, plus persistent samples, checkpoints, recovery history, and `run status`.
+- Add `run launch` as a unified preflight, monitored supervision, recovery, acceptance, and
+  manifest workflow with one privacy-safe summary.
+- Replace unsafe Windows `os.kill(pid, 0)` liveness checks with read-only process handle queries.
 - Split parser and run watch/check/manifest modules, remove unused abstractions, and share one
   reliability runtime across the public API and Hugging Face callback.
 - Retain deprecated command aliases for this candidate cycle only; removal is scheduled for

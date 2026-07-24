@@ -235,10 +235,24 @@ def get_memory_info() -> Dict[str, Any]:
         return {"ok": False, "error": str(exc)}
 
 
+def _windows_pid_alive(pid: int) -> bool:
+    import ctypes
+
+    process_query_limited_information = 0x1000
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    handle = kernel32.OpenProcess(process_query_limited_information, False, pid)
+    if handle:
+        kernel32.CloseHandle(handle)
+        return True
+    return ctypes.get_last_error() == 5
+
+
 def pid_alive(pid: int) -> bool:
-    """Return True if process exists."""
+    """Return True if a process exists without signaling it."""
     if pid <= 0:
         return False
+    if os.name == "nt":
+        return _windows_pid_alive(pid)
     try:
         os.kill(pid, 0)
         return True

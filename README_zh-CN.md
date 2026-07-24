@@ -63,10 +63,23 @@ train-guard manifest --config train-guard.json
 ## 界面与恢复
 
 - **CLI：**稳定接口；参见 [docs/CLI.md](docs/CLI.md)。
+- **统一启动：**`train-guard run launch` 使用同一 run ID 串联环境预检、受监督训练、实时可靠性采集、有限恢复、训练后检查和清单生成。
 - **Web：**`train-guard show --state-db PATH` 仅在回环地址展示指标、GPU 状态、告警、检查点、恢复历史和受监督进程。
 - **TUI：**`train-guard tui --state-db PATH` 通过 SSH 提供同一持久状态视图。
 - **状态快照：**`train-guard run status --state-db PATH` 输出适合脚本使用的单次状态。
 - **受控恢复：**`run supervise` 只启动显式 argv；只有传入 `--restart`、检查点验证通过且未耗尽有限预算时才自动重启。它不会执行 shell 字符串。
+
+新训练建议使用统一入口：
+
+```bash
+train-guard run launch --output-dir ./outputs/run-1 --framework huggingface \
+  --expected-steps 100 -- python train.py --output_dir ./outputs/run-1
+```
+
+该命令会生成统一摘要、环境报告、监控记录、审计日志、训练后检查、运行清单和 SQLite 状态。
+只有希望环境检查失败时阻止训练启动，才需要添加 `--strict-preflight`。框架恢复参数仍由训练 argv 显式提供。
+
+仅需独立监督功能时可使用：
 
 ```bash
 train-guard run supervise --restart --max-restarts 1 \
@@ -77,12 +90,15 @@ train-guard run supervise --restart --max-restarts 1 \
 
 训练 argv 必须包含框架对应的恢复选项。
 
-控制功能默认关闭。受监督训练与 Web 面板必须都显式传入 `--enable-control`，并使用同一状态数据库。面板只在启动时显示一次内存令牌，只接受作用于该受监督进程的允许操作：
+控制功能默认关闭。受监督训练与 Web 面板必须都显式传入 `--enable-control`，并使用同一状态数据库。面板只在启动时显示一次内存令牌，只接受该受监督进程声明支持的操作：
 
 ```bash
 train-guard run supervise --enable-control --state-db ./guard.sqlite -- python train.py
 train-guard show --enable-control --state-db ./guard.sqlite
 ```
+
+支持的控制操作为暂停、恢复、优雅停止、终止和验证后重启。检查点创建依赖具体训练框架，
+因此不作为通用控制操作。自动重启尝试和结果会与人工控制一起进入恢复历史。
 
 控制接口拒绝非回环客户端、非本地来源、过期或重复命令、未受监督进程和不支持的能力。请勿通过公网代理暴露面板。
 

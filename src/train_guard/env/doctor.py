@@ -240,6 +240,7 @@ def run_bundle_info(self_path: Path) -> Dict[str, Any]:
             "run check",
             "run compare",
             "run status",
+            "run launch",
             "run supervise",
             "show",
             "tui",

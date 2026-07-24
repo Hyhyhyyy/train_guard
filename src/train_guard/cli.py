@@ -36,6 +36,7 @@ from .env.doctor import run_bundle_info, run_doctor, status_to_exit
 from .eval.metrics import run_eval
 from .report.html import render_html_report
 from .run.commands import cmd_run_watch, run_manifest, run_run_check, run_run_compare
+from .run.launch import run_launch
 from .state import AuditLog, StateStore
 from .status import build_status_snapshot
 from .supervisor import (
@@ -247,6 +248,11 @@ def _dispatch(args: argparse.Namespace) -> int:
         ):
             return EXIT_FAIL
         return EXIT_WARN if "warning" in severities else EXIT_OK
+
+    if handler == "run_launch":
+        summary = run_launch(vars(args))
+        print(json.dumps(summary, ensure_ascii=False, indent=2, allow_nan=False))
+        return status_to_exit(str(summary.get("overall_status") or "FAIL"))
 
     if handler == "run_supervise":
         command = list(args.training_command)

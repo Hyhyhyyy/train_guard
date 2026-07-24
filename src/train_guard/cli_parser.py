@@ -205,6 +205,49 @@ def build_parser() -> argparse.ArgumentParser:
     command.add_argument("--json-output", type=Path)
     command.set_defaults(_handler="run_status")
     command = run_sub.add_parser(
+        "launch",
+        help="Run preflight, monitored training, recovery, and acceptance as one workflow",
+        epilog=STATUS_HELP,
+    )
+    command.add_argument("--output-dir", type=Path, required=True)
+    command.add_argument(
+        "--framework",
+        choices=("generic", "huggingface", "transformers", "llamafactory"),
+        default="generic",
+    )
+    command.add_argument(
+        "--training-type", choices=("auto", "peft", "lora", "qlora", "full"), default="auto"
+    )
+    command.add_argument("--expected-steps", type=int)
+    command.add_argument("--expected-gpus", type=int)
+    command.add_argument("--model-path", type=Path)
+    command.add_argument("--run-id")
+    command.add_argument("--state-db", type=Path)
+    command.add_argument("--summary-out", type=Path)
+    command.add_argument("--audit-log", type=Path)
+    command.add_argument("--log-file", type=Path)
+    command.add_argument("--monitor-interval", type=int, default=5)
+    command.add_argument("--strict-preflight", action="store_true")
+    command.add_argument("--restart", action="store_true")
+    command.add_argument("--max-restarts", type=int, default=0)
+    command.add_argument("--restart-window-seconds", type=float, default=3600.0)
+    command.add_argument("--checkpoint-dir", type=Path)
+    command.add_argument("--health-file", type=Path)
+    command.add_argument("--health-max-age", type=float, default=30.0)
+    command.add_argument("--health-timeout", type=float, default=120.0)
+    command.add_argument("--health-interval", type=float, default=2.0)
+    command.add_argument(
+        "--required-checkpoint-file",
+        action="append",
+        default=[],
+        help="Checkpoint-relative file required before restart; repeatable",
+    )
+    command.add_argument("--enable-control", action="store_true")
+    command.add_argument("--seed")
+    command.add_argument("training_command", nargs=argparse.REMAINDER)
+    command.set_defaults(_handler="run_launch")
+
+    command = run_sub.add_parser(
         "supervise",
         help="Launch a training command with bounded, checkpoint-gated restart",
         epilog=STATUS_HELP,

@@ -172,13 +172,17 @@ def test_memory_and_pid_fallbacks() -> None:
         assert io_util.get_memory_info()["ok"] is False
 
     assert io_util.pid_alive(0) is False
+    assert io_util.pid_alive(io_util.os.getpid()) is True
     for error, expected in (
         (None, True),
         (ProcessLookupError(), False),
         (PermissionError(), True),
         (OSError(), False),
     ):
-        with mock.patch.object(io_util.os, "kill", side_effect=error):
+        with (
+            mock.patch.object(io_util.os, "name", "posix"),
+            mock.patch.object(io_util.os, "kill", side_effect=error),
+        ):
             assert io_util.pid_alive(123) is expected
 
 

@@ -315,6 +315,16 @@ class ControlStore(Protocol):
     ) -> None: ...
 
 
+def _record_automatic_recovery(
+    store: Optional[ControlStore],
+    run_id: Optional[str],
+    status: str,
+    details: Mapping[str, object],
+) -> None:
+    if store is not None and run_id is not None:
+        store.record_recovery(run_id, "automatic_restart", status, details)
+
+
 def supervise(
     spec: ProcessSpec,
     *,
@@ -336,6 +346,7 @@ def supervise(
     """
     guard = recovery_guard or RecoveryGuard()
     restarts = 0
+    pending_automatic_restart: Optional[int] = None
     while True:
         process = ManagedProcess(spec)
         pid = process.start()
@@ -356,9 +367,25 @@ def supervise(
         if health_probe is not None and restarts > 0:
             if not guard.wait_until_healthy(health_probe):
                 exit_code = process.terminate()
+                if pending_automatic_restart is not None:
+                    _record_automatic_recovery(
+                        control_store,
+                        run_id,
+                        "failed",
+                        {"restart": pending_automatic_restart, "reason": "health_probe_failed"},
+                    )
+                    pending_automatic_restart = None
                 if audit:
                     audit({"type": "recovery_probe_failed", "exit_code": exit_code})
                 return SupervisionResult(exit_code, restarts, "health_probe_failed")
+            if pending_automatic_restart is not None:
+                _record_automatic_recovery(
+                    control_store,
+                    run_id,
+                    "succeeded",
+                    {"restart": pending_automatic_restart, "pid": pid},
+                )
+                pending_automatic_restart = None
         requested_restart = False
         requested_stop: Optional[str] = None
         if control_enabled and control_store is not None and run_id is not None:
@@ -376,6 +403,18 @@ def supervise(
             control_store.register_managed_process(run_id, pid, "exited", ())
         if audit:
             audit({"type": "process_exited", "exit_code": exit_code, "restart": restarts})
+        if pending_automatic_restart is not None and health_probe is None:
+            _record_automatic_recovery(
+                control_store,
+                run_id,
+                "succeeded" if exit_code == 0 else "failed",
+                {
+                    "restart": pending_automatic_restart,
+                    "pid": pid,
+                    "exit_code": exit_code,
+                },
+            )
+            pending_automatic_restart = None
         if requested_stop is not None:
             return SupervisionResult(exit_code, restarts, f"control_{requested_stop}")
         if exit_code == 0 and not requested_restart:
@@ -383,6 +422,13 @@ def supervise(
         if not restart_enabled and not requested_restart:
             return SupervisionResult(exit_code, restarts, "restart_disabled")
         if checkpoint_path is None or checkpoint_validator is None:
+            if not requested_restart:
+                _record_automatic_recovery(
+                    control_store,
+                    run_id,
+                    "rejected",
+                    {"reason": "checkpoint_validation_not_configured"},
+                )
             return SupervisionResult(
                 exit_code,
                 restarts,
@@ -391,6 +437,13 @@ def supervise(
             )
         validation = checkpoint_validator.validate(checkpoint_path)
         if not validation.valid:
+            if not requested_restart:
+                _record_automatic_recovery(
+                    control_store,
+                    run_id,
+                    "rejected",
+                    {"reason": "checkpoint_invalid", "errors": list(validation.errors)},
+                )
             if audit:
                 audit(
                     {
@@ -400,8 +453,23 @@ def supervise(
                 )
             return SupervisionResult(exit_code, restarts, "checkpoint_invalid", validation.errors)
         if not guard.permit_restart(time.time()):
+            if not requested_restart:
+                _record_automatic_recovery(
+                    control_store,
+                    run_id,
+                    "rejected",
+                    {"reason": "restart_budget_exhausted"},
+                )
             return SupervisionResult(exit_code, restarts, "restart_budget_exhausted")
         restarts += 1
+        if not requested_restart:
+            _record_automatic_recovery(
+                control_store,
+                run_id,
+                "attempted",
+                {"restart": restarts, "checkpoint_digest": validation.digest},
+            )
+            pending_automatic_restart = restarts
         if audit:
             audit(
                 {

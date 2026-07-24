@@ -90,26 +90,28 @@ padding:12px 16px;background:#152131;border:1px solid var(--line);border-radius:
 
 JS = r"""
 const $=s=>document.querySelector(s);let currentRun="",token=sessionStorage.getItem("tg-token")||"";
-const esc=v=>String(v??"");const fmt=v=>Number.isFinite(Number(v))?Number(v).toFixed(3):"--";
-function card(label,value){return `<div class="metric"><label>${label}</label><strong>${esc(value)}</strong></div>`}
-function rows(items,render,empty){return items?.length?items.map(render).join(""):`<div class="empty">${empty}</div>`}
+const esc=v=>String(v??"").replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]));
+const fmt=v=>Number.isFinite(Number(v))?Number(v).toFixed(3):"--";
+function card(label,value){return `<div class="metric"><label>${esc(label)}</label><strong>${esc(value)}</strong></div>`}
+function rows(items,render,empty){return items?.length?items.map(render).join(""):`<div class="empty">${esc(empty)}</div>`}
 function chart(name,values){const nums=(values||[]).map(Number).filter(Number.isFinite);let points="";
 if(nums.length>1){const lo=Math.min(...nums),hi=Math.max(...nums),span=hi-lo||1;points=nums.map((v,i)=>
 `${i*100/(nums.length-1)},${95-(v-lo)*85/span}`).join(" ")}
-return `<div class="chart"><label>${name}</label><b>${nums.length?fmt(nums.at(-1)):"--"}</b>
+return `<div class="chart"><label>${esc(name)}</label><b>${nums.length?fmt(nums.at(-1)):"--"}</b>
 <svg viewBox="0 0 100 100" preserveAspectRatio="none"><polyline points="${points}"/></svg></div>`}
 function render(s){const latest=s.latest_sample||{},m=latest.metrics||{},proc=s.managed_process||{};
+const gpuPayload=latest.gpus;const gpus=Array.isArray(gpuPayload)?gpuPayload:(Array.isArray(gpuPayload?.gpus)?gpuPayload.gpus:[]);
 $("#summary").innerHTML=card("Run",s.run_id||"--")+card("Phase",s.phase||"unknown")+
 card("Step",m.step??latest.global_step??"--")+card("Loss",fmt(m.loss))+card("Active alerts",s.active_alerts?.length||0);
 $("#sample-time").textContent=latest.timestamp||"no samples";
 $("#charts").innerHTML=chart("Loss",s.series?.loss)+chart("Grad norm",s.series?.grad_norm)+chart("Throughput",s.series?.throughput);
-$("#gpus").innerHTML=rows(latest.gpus||[],g=>`<div class="row"><div class="row-head"><b>GPU ${g.index}</b>
+$("#gpus").innerHTML=rows(gpus,g=>`<div class="row"><div class="row-head"><b>GPU ${esc(g.index)}</b>
 <span>${fmt(g.temperature_c)} C</span></div><div class="muted">${fmt(g.memory_used_mb)} / ${fmt(g.memory_total_mb)} MiB</div>
 <div class="bar"><i style="width:${Math.max(0,Math.min(100,Number(g.utilization_gpu)||0))}%"></i></div></div>`,"No GPU samples");
 $("#process").innerHTML=proc.pid?`<div class="row"><div class="row-head"><b>PID ${proc.pid}</b><span>${esc(proc.status)}</span></div>
 <div class="muted">${esc(proc.capabilities?.join(", ")||"observe only")}</div></div>`:`<div class="empty">No supervised process</div>`;
 $("#control-mode").textContent=s.control_enabled?"CONTROL ENABLED":"READ ONLY";
-const actions=["pause","resume","checkpoint","graceful_stop","terminate","validated_restart"];
+const actions=["pause","resume","graceful_stop","terminate","validated_restart"];
 $("#controls").innerHTML=actions.map(a=>`<button data-action="${a}" class="${a==="terminate"?"danger":""}"
 ${!s.control_enabled||!proc.capabilities?.includes(a)?"disabled":""}>${a.replace("_"," ")}</button>`).join("");
 $("#controls").querySelectorAll("button").forEach(b=>b.onclick=()=>command(b.dataset.action));
