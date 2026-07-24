@@ -31,6 +31,7 @@ ORDER = [
     "data/cache.py",
     "data/commands.py",
     "data/__init__.py",
+    "run/lifecycle.py",
     "run/commands.py",
     "run/__init__.py",
     "env/doctor.py",

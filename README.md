@@ -25,6 +25,7 @@ train-guard run check --config train-guard.json
 train-guard manifest --config train-guard.json
 ```
 
+`run watch` writes `watch.jsonl` and `train_guard_lifecycle.jsonl` (`start` → `heartbeat`/`checkpoint` → `finish`/`abort`). `run check`, `manifest`, and `run compare` read that lifecycle summary.
 No install? Use the development launcher or the single-file release:
 
 ```bash

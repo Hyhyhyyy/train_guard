@@ -51,6 +51,7 @@
       "html_output": "./reports/run_check.html"
     },
     "compare": {
+      "framework": "generic",
       "left": "./outputs",
       "right": "./outputs-baseline",
       "json_output": "./reports/run_compare.json"

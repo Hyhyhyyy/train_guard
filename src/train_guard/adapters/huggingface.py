@@ -219,9 +219,72 @@ class HuggingFaceFrameworkAdapter:
 
 
 class LLaMAFactoryFrameworkAdapter(HuggingFaceFrameworkAdapter):
-    """LLaMAFactory uses HF Trainer artifacts with similar layout."""
+    """LLaMAFactory saves under saves/... with HF-compatible trainer artifacts."""
 
     name = "llamafactory"
+
+    def _candidate_roots(self, output_dir: Path) -> List[Path]:
+        roots = [output_dir]
+        if not output_dir.is_dir():
+            return roots
+        try:
+            for child in sorted(output_dir.iterdir()):
+                if not child.is_dir():
+                    continue
+                roots.append(child)
+                try:
+                    for grand in sorted(child.iterdir()):
+                        if grand.is_dir():
+                            roots.append(grand)
+                except OSError:
+                    continue
+        except OSError:
+            return roots
+        return roots
+
+    def locate_trainer_state(self, output_dir: Path) -> Optional[Path]:
+        """Prefer root/checkpoint, then nested LLaMAFactory save folders (depth <= 2)."""
+        found = super().locate_trainer_state(output_dir)
+        if found is not None:
+            return found
+        candidates: List[Path] = []
+        for root in self._candidate_roots(output_dir):
+            direct = root / "trainer_state.json"
+            if direct.is_file():
+                candidates.append(direct)
+            for ckpt in list_checkpoint_dirs(root):
+                nested = ckpt / "trainer_state.json"
+                if nested.is_file():
+                    candidates.append(nested)
+        return candidates[-1] if candidates else None
+
+    def list_checkpoints(self, output_dir: Path) -> List[Path]:
+        """Include checkpoint-* under output_dir and nested save folders."""
+        found: List[Path] = []
+        seen = set()
+        for root in self._candidate_roots(output_dir):
+            for ckpt in list_checkpoint_dirs(root):
+                key = ckpt.resolve()
+                if key in seen:
+                    continue
+                seen.add(key)
+                found.append(ckpt)
+        return found
+
+    def find_adapter_artifacts(self, output_dir: Path) -> AdapterArtifacts:
+        """Search output root and nested LLaMAFactory save dirs for adapters."""
+        checkpoints = self.list_checkpoints(output_dir)
+        roots = list(dict.fromkeys([*self._candidate_roots(output_dir), *checkpoints]))
+        configs: List[Path] = []
+        for root in roots:
+            cfg = root / "adapter_config.json"
+            if cfg.is_file():
+                configs.append(cfg)
+        return AdapterArtifacts(
+            adapter_configs=configs,
+            weight_files=find_lora_weights(roots),
+            checkpoints=checkpoints,
+        )
 
 
 class GenericFrameworkAdapter(HuggingFaceFrameworkAdapter):

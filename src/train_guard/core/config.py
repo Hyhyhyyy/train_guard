@@ -88,6 +88,7 @@ def _template(framework: str) -> Dict[str, Any]:
                 "html_output": "./reports/run_check.html",
             },
             "compare": {
+                "framework": framework,
                 "left": output_dir,
                 "right": f"{output_dir}-baseline",
                 "json_output": "./reports/run_compare.json",
@@ -262,6 +263,7 @@ SECTION_FIELDS: Dict[tuple[str, ...], Dict[str, tuple[type, ...]]] = {
     ("run", "compare"): {
         "left": _t(str),
         "right": _t(str),
+        "framework": _t(str),
         "json_output": _t(str, type(None)),
     },
     ("eval",): {
@@ -312,7 +314,7 @@ DEFAULTS: Dict[tuple[str, ...], Dict[str, Any]] = {
         "json_output": None,
         "html_output": None,
     },
-    ("run", "compare"): {"json_output": None},
+    ("run", "compare"): {"framework": "generic", "json_output": None},
     ("eval",): {
         "references": None, "prediction_field": None, "reference_field": None,
         "group_id": "group_id", "label_field": None,

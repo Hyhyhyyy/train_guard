@@ -1,4 +1,8 @@
+docs/MIGRATION.md
+
 # Train Guard migration notes
+
+Version 0.5 adds a privacy-safe run lifecycle JSONL (`train_guard_lifecycle.jsonl`) produced by `run watch` and consumed by `run check`, `manifest`, and `run compare`.
 
 Version 0.3 introduces a modular package under `src/train_guard/` and a controlled single-file candidate under `release/`.
 

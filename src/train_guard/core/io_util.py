@@ -84,12 +84,12 @@ def get_disk_usage(path: Path) -> Dict[str, Any]:
 
 
 def get_cpu_load() -> Dict[str, Any]:
-    """CPU load averages when available."""
+    """CPU load averages when available (Unix); Windows returns ok=False."""
     try:
         load1, load5, load15 = os.getloadavg()
         return {"load1": load1, "load5": load5, "load15": load15, "ok": True}
-    except OSError as exc:
-        return {"ok": False, "error": str(exc)}
+    except (OSError, AttributeError) as exc:
+        return {"ok": False, "error": str(exc) or "getloadavg unavailable"}
 
 
 def get_memory_info() -> Dict[str, Any]:

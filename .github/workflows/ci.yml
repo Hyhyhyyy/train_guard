@@ -1,0 +1,41 @@
+name: ci
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.12"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Install package
+        run: pip install -e .
+
+      - name: Unit tests
+        run: python -m unittest discover -s tests -v
+
+      - name: Privacy scan (source)
+        run: python scripts/privacy_scan.py --mode source --root .
+
+      - name: Bundle single-file release
+        run: python scripts/bundle_singlefile.py
+
+      - name: Release manifest gate
+        run: python scripts/check_release_manifest.py
+
+      - name: Privacy scan (release)
+        run: python scripts/privacy_scan.py --allowlist configs/privacy_scan_allowlist.json

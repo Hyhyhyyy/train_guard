@@ -26,6 +26,16 @@ from ..core.io_util import (
 )
 from ..core.privacy import redact_value
 from ..report.html import render_html_report
+from .lifecycle import (
+    PHASE_ABORTED,
+    PHASE_FINISHED,
+    PHASE_NONE,
+    append_lifecycle_event,
+    checkpoint_delta,
+    lifecycle_path,
+    make_lifecycle_event,
+    summarize_lifecycle,
+)
 
 LOGGER = logging.getLogger("train_guard.run")
 _SHUTDOWN = False
@@ -192,7 +202,7 @@ def collect_watch_sample(cfg: Mapping[str, Any], state: MutableMapping[str, Any]
 
 
 def cmd_run_watch(cfg: Dict[str, Any]) -> int:
-    """Periodic or once watch loop."""
+    """Periodic or once watch loop with lifecycle JSONL."""
     global _SHUTDOWN
     _SHUTDOWN = False
     signal.signal(signal.SIGINT, _handle_signal)
@@ -201,15 +211,89 @@ def cmd_run_watch(cfg: Dict[str, Any]) -> int:
     out_dir = Path(cfg.get("output_dir") or "reports/watch")
     out_dir.mkdir(parents=True, exist_ok=True)
     jsonl_path = out_dir / "watch.jsonl"
-    state: Dict[str, Any] = {"idle_counts": {}, "log_offset": 0, "last_metrics_fp": None}
+    life_path = lifecycle_path(out_dir)
+    framework = str(cfg.get("framework") or "generic")
+    state: Dict[str, Any] = {
+        "idle_counts": {},
+        "log_offset": 0,
+        "last_metrics_fp": None,
+        "lifecycle_started": False,
+        "seen_checkpoints": [],
+    }
     once = bool(cfg.get("once"))
     interval = max(1, int(cfg.get("interval") or 30))
     exit_code = EXIT_OK
+    last_step: Optional[int] = None
+    last_checkpoints: List[str] = []
+    saw_error_alert = False
     try:
         while True:
             sample = collect_watch_sample(cfg, state)
             append_jsonl(jsonl_path, sample)
             metrics = sample.get("metrics") or {}
+            trainer = sample.get("trainer_state") or {}
+            checkpoints = list(sample.get("checkpoints") or [])
+            last_checkpoints = checkpoints
+            step_raw = trainer.get("global_step")
+            if step_raw is None:
+                step_raw = metrics.get("step")
+            try:
+                last_step = int(step_raw) if step_raw is not None else last_step
+            except (TypeError, ValueError):
+                pass
+            alert_codes = [
+                str(a.get("code"))
+                for a in (sample.get("alerts") or [])
+                if isinstance(a, dict) and a.get("code")
+            ]
+            if any((a.get("level") == "ERROR") for a in (sample.get("alerts") or []) if isinstance(a, dict)):
+                saw_error_alert = True
+
+            if not state.get("lifecycle_started"):
+                append_lifecycle_event(
+                    life_path,
+                    make_lifecycle_event(
+                        "start",
+                        framework=framework,
+                        global_step=last_step,
+                        checkpoints=checkpoints,
+                        message="watch started",
+                    ),
+                )
+                state["lifecycle_started"] = True
+                state["seen_checkpoints"] = list(checkpoints)
+
+            new_ckpts = checkpoint_delta(state.get("seen_checkpoints") or [], checkpoints)
+            if new_ckpts:
+                append_lifecycle_event(
+                    life_path,
+                    make_lifecycle_event(
+                        "checkpoint",
+                        framework=framework,
+                        global_step=last_step,
+                        checkpoints=checkpoints,
+                        alert_codes=alert_codes,
+                        message=f"new checkpoints: {', '.join(new_ckpts)}",
+                        extra={"new_checkpoints": new_ckpts},
+                    ),
+                )
+                state["seen_checkpoints"] = list(checkpoints)
+
+            append_lifecycle_event(
+                life_path,
+                make_lifecycle_event(
+                    "heartbeat",
+                    framework=framework,
+                    global_step=last_step,
+                    checkpoints=checkpoints,
+                    alert_codes=alert_codes,
+                    extra={
+                        "gpu_count": (sample.get("gpus") or {}).get("count"),
+                        "pid_alive": (sample.get("pid") or {}).get("alive"),
+                    },
+                ),
+            )
+
             print(
                 f"[{sample['timestamp']}] GPUs={(sample.get('gpus') or {}).get('count')} "
                 f"loss={metrics.get('loss')} eval_loss={metrics.get('eval_loss')} "
@@ -231,8 +315,37 @@ def cmd_run_watch(cfg: Dict[str, Any]) -> int:
                 break
     except Exception as exc:  # noqa: BLE001
         LOGGER.error("Watch failed: %s", exc)
+        try:
+            append_lifecycle_event(
+                life_path,
+                make_lifecycle_event(
+                    "abort",
+                    framework=framework,
+                    global_step=last_step,
+                    checkpoints=last_checkpoints,
+                    message=f"watch failed: {type(exc).__name__}",
+                ),
+            )
+        except OSError:
+            pass
         return EXIT_RUNTIME
+
+    terminal_kind = "abort" if (saw_error_alert or exit_code >= EXIT_FAIL) else "finish"
+    try:
+        append_lifecycle_event(
+            life_path,
+            make_lifecycle_event(
+                terminal_kind,
+                framework=framework,
+                global_step=last_step,
+                checkpoints=last_checkpoints,
+                message="watch stopped" if terminal_kind == "finish" else "watch stopped with errors",
+            ),
+        )
+    except OSError:
+        pass
     print(f"Watch data written: {jsonl_path}")
+    print(f"Lifecycle written: {life_path}")
     return exit_code
 
 
@@ -360,6 +473,41 @@ def run_run_check(
         reasons.append("Missing LoRA weights")
 
     items.append(CheckItem("resume_artifacts", "INFO", "Optional resume files are not required", {}))
+
+    life = summarize_lifecycle(lifecycle_path(output_dir))
+    if not life.get("present") or life.get("event_count", 0) == 0:
+        items.append(
+            CheckItem(
+                "lifecycle",
+                "INFO",
+                "No train_guard_lifecycle.jsonl yet (optional; produced by run watch)",
+                {},
+            )
+        )
+    else:
+        phase = str(life.get("phase") or PHASE_NONE)
+        detail = {
+            "phase": phase,
+            "event_count": life.get("event_count"),
+            "global_step": life.get("global_step"),
+            "checkpoints": life.get("checkpoints") or [],
+        }
+        if phase == PHASE_ABORTED:
+            items.append(CheckItem("lifecycle", "FAIL", f"Lifecycle phase={phase}", detail))
+            reasons.append("Lifecycle aborted")
+        elif phase == PHASE_FINISHED:
+            items.append(CheckItem("lifecycle", "PASS", f"Lifecycle phase={phase}", detail))
+        else:
+            items.append(
+                CheckItem(
+                    "lifecycle",
+                    "WARN",
+                    f"Lifecycle phase={phase} (watch did not record finish)",
+                    detail,
+                )
+            )
+            reasons.append(f"Lifecycle incomplete ({phase})")
+
     return _pack_check(items, reasons, global_step, expected_steps, output_dir.name)
 
 
@@ -398,11 +546,14 @@ def run_manifest(cfg: Dict[str, Any]) -> Dict[str, Any]:
     """Create run manifest + experiment fingerprint (no raw training content)."""
     output_dir = Path(cfg.get("output_dir") or ".")
     framework = str(cfg.get("framework") or "generic")
+    life = summarize_lifecycle(lifecycle_path(output_dir))
     parts = [
         framework,
         output_dir.name,
         str(cfg.get("expected_steps") or ""),
         str(cfg.get("seed") or ""),
+        str(life.get("phase") or ""),
+        str(life.get("event_count") or 0),
     ]
     # Include sorted names of checkpoint dirs and adapter presence, not file contents
     adapter = get_framework_adapter(framework)
@@ -425,6 +576,13 @@ def run_manifest(cfg: Dict[str, Any]) -> Dict[str, Any]:
         "framework": framework,
         "output_dir_name": output_dir.name,
         "checkpoint_names": ckpt_names.split(",") if ckpt_names else [],
+        "lifecycle": {
+            "phase": life.get("phase"),
+            "event_count": life.get("event_count"),
+            "global_step": life.get("global_step"),
+            "has_finish": life.get("has_finish"),
+            "has_abort": life.get("has_abort"),
+        },
         "experiment_fingerprint": fingerprint,
         "note": "Fingerprint excludes raw samples, logs text, and absolute paths.",
     }
@@ -434,10 +592,14 @@ def run_manifest(cfg: Dict[str, Any]) -> Dict[str, Any]:
     return redact_value(manifest)
 
 
-def run_run_compare(left_dir: Path, right_dir: Path) -> Dict[str, Any]:
+def run_run_compare(
+    left_dir: Path,
+    right_dir: Path,
+    framework: str = "huggingface",
+) -> Dict[str, Any]:
     """Compare two run output dirs by fingerprint/steps (no raw content)."""
     def snap(d: Path) -> Dict[str, Any]:
-        fw = get_framework_adapter("huggingface")
+        fw = get_framework_adapter(framework)
         state = fw.locate_trainer_state(d)
         step = None
         if state and state.is_file():
@@ -447,12 +609,15 @@ def run_run_compare(left_dir: Path, right_dir: Path) -> Dict[str, Any]:
             except (OSError, json.JSONDecodeError):
                 step = None
         arts = fw.find_adapter_artifacts(d)
+        life = summarize_lifecycle(lifecycle_path(d))
         return {
             "name": d.name,
             "global_step": step,
             "checkpoints": len(arts.checkpoints),
             "weights": len([w for w in arts.weight_files if w.get("ok")]),
             "has_adapter_config": bool(arts.adapter_configs),
+            "lifecycle_phase": life.get("phase"),
+            "lifecycle_events": life.get("event_count"),
         }
 
     a = snap(left_dir)
@@ -462,6 +627,7 @@ def run_run_compare(left_dir: Path, right_dir: Path) -> Dict[str, Any]:
         "command": "run compare",
         "version": __version__,
         "timestamp": utc_now_iso(),
+        "framework": framework,
         "left": a,
         "right": b,
         "step_delta": None if a["global_step"] is None or b["global_step"] is None else (b["global_step"] - a["global_step"]),

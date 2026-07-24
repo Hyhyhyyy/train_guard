@@ -126,6 +126,7 @@ def _run_compare_args(parser: argparse.ArgumentParser) -> None:
     _configured(parser)
     _add(parser, "--left")
     _add(parser, "--right")
+    _add(parser, "--framework", choices=("generic", "huggingface", "transformers", "llamafactory"))
     _add(parser, "--json-output")
 
 
@@ -368,7 +369,11 @@ def _dispatch(args: argparse.Namespace) -> int:
         return status_to_exit(report["overall_status"])
 
     if handler == "run_compare":
-        report = run_run_compare(Path(args.left), Path(args.right))
+        report = run_run_compare(
+            Path(args.left),
+            Path(args.right),
+            framework=getattr(args, "framework", None) or "huggingface",
+        )
         print(json.dumps(report, ensure_ascii=False, indent=2))
         if args.json_output:
             write_json(Path(args.json_output), report, overwrite=True)
