@@ -236,11 +236,15 @@ def cmd_run_watch(cfg: Dict[str, Any]) -> int:
     return exit_code
 
 
-def run_run_check(output_dir: Path, expected_steps: Optional[int] = None) -> Dict[str, Any]:
+def run_run_check(
+    output_dir: Path,
+    expected_steps: Optional[int] = None,
+    framework: str = "huggingface",
+) -> Dict[str, Any]:
     """Post-training completion check (LoRA/Trainer artifacts)."""
     items: List[CheckItem] = []
     reasons: List[str] = []
-    framework = get_framework_adapter("huggingface")
+    adapter = get_framework_adapter(framework)
 
     if not output_dir.exists():
         items.append(CheckItem("output_dir", "FAIL", "Output directory does not exist", {}))
@@ -251,7 +255,7 @@ def run_run_check(output_dir: Path, expected_steps: Optional[int] = None) -> Dic
 
     items.append(CheckItem("output_dir", "PASS", "Output directory readable", {"name": output_dir.name}))
 
-    state_path = framework.locate_trainer_state(output_dir)
+    state_path = adapter.locate_trainer_state(output_dir)
     trainer_state: Dict[str, Any] = {}
     global_step = None
     if state_path is None:
@@ -321,7 +325,7 @@ def run_run_check(output_dir: Path, expected_steps: Optional[int] = None) -> Dic
         else:
             items.append(CheckItem("train_metrics", "PASS", "train_runtime/train_loss/train_samples_per_second present", train_metrics))
 
-    artifacts = framework.find_adapter_artifacts(output_dir)
+    artifacts = adapter.find_adapter_artifacts(output_dir)
     if artifacts.checkpoints:
         items.append(CheckItem("checkpoints", "PASS", f"{len(artifacts.checkpoints)} non-empty checkpoint(s)", {"names": [p.name for p in artifacts.checkpoints]}))
     else:

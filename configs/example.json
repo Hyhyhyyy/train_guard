@@ -12,29 +12,62 @@
       "full_scan": false,
       "compute_hash": false,
       "verify_images": true,
+      "group_id": "group_id",
       "messages": "messages",
       "media": "media",
-      "group_id": "group_id",
       "split": "split",
       "report_dir": "./reports/data_check"
+    },
+    "inventory": {
+      "annotation": "./data/train.jsonl",
+      "sample_limit": 1000,
+      "group_id": "group_id",
+      "report_dir": "./reports/data_inventory"
+    },
+    "compare": {
+      "left": "./data/train.jsonl",
+      "right": "./data/val.jsonl",
+      "sample_limit": 1000,
+      "group_id": "group_id",
+      "report_dir": "./reports/data_compare"
     }
   },
   "run": {
     "watch": {
-      "interval": 30,
-      "once": true,
       "framework": "generic",
+      "once": true,
+      "interval": 30,
       "output_dir": "./outputs",
       "log_file": "./outputs/train.log",
       "expected_gpus": null,
-      "stale_log_minutes": 15,
+      "stale_log_minutes": 15.0,
       "disk_free_gb_threshold": 10.0
+    },
+    "check": {
+      "framework": "generic",
+      "output_dir": "./outputs",
+      "expected_steps": null,
+      "json_output": "./reports/run_check.json",
+      "html_output": "./reports/run_check.html"
+    },
+    "compare": {
+      "left": "./outputs",
+      "right": "./outputs-baseline",
+      "json_output": "./reports/run_compare.json"
     }
   },
   "eval": {
     "predictions": "./outputs/predictions.jsonl",
     "references": "./data/references.jsonl",
     "group_id": "group_id",
-    "keywords": []
+    "keywords": [],
+    "report_dir": "./reports/eval"
+  },
+  "manifest": {
+    "framework": "generic",
+    "output_dir": "./outputs",
+    "manifest_out": "./reports/run_manifest.json",
+    "expected_steps": null,
+    "seed": null
   }
 }

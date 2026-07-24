@@ -27,7 +27,7 @@ from .core.exitcodes import (
 )
 from .core.io_util import write_json
 from .data.commands import run_data_check, run_data_compare, run_data_inventory, write_data_reports
-from .env.doctor import run_doctor, status_to_exit
+from .env.doctor import run_bundle_info, run_doctor, status_to_exit
 from .eval.metrics import run_eval
 from .report.html import render_html_report
 from .run.commands import cmd_run_watch, run_manifest, run_run_check, run_run_compare
@@ -116,6 +116,7 @@ def _run_watch_args(parser: argparse.ArgumentParser) -> None:
 def _run_check_args(parser: argparse.ArgumentParser) -> None:
     _configured(parser)
     _add(parser, "--output-dir")
+    _add(parser, "--framework", choices=("generic", "huggingface", "transformers", "llamafactory"))
     _add(parser, "--expected-steps", type=int)
     _add(parser, "--json-output")
     _add(parser, "--html-output")
@@ -283,7 +284,11 @@ def _dispatch(args: argparse.Namespace) -> int:
     if handler == "init":
         write_config_template(args.output, args.template, args.force)
         print(f"PASS config written: {args.output}")
-        print("Next: edit paths, then run `train-guard doctor --config <file>`.")
+        print("Next:")
+        print(f"  1. Edit placeholder paths in {args.output}")
+        print(f"  2. train-guard doctor --config {args.output}")
+        print(f"  3. train-guard data check --config {args.output}")
+        print(f"  4. After training: train-guard run check --config {args.output}")
         return EXIT_OK
 
     if handler in {"legacy_precheck", "data_check"}:
@@ -332,7 +337,11 @@ def _dispatch(args: argparse.Namespace) -> int:
     if handler in {"legacy_postcheck", "run_check"}:
         if handler == "legacy_postcheck":
             _warn_deprecated("postcheck", "run check")
-        report = run_run_check(Path(args.output_dir), expected_steps=args.expected_steps)
+        report = run_run_check(
+            Path(args.output_dir),
+            expected_steps=args.expected_steps,
+            framework=getattr(args, "framework", None) or "huggingface",
+        )
         print("=" * 60)
         print(f"run check — {report['overall_status']}")
         for item in report.get("checks") or []:
@@ -407,30 +416,9 @@ def _dispatch(args: argparse.Namespace) -> int:
         return EXIT_OK
 
     if handler == "bundle_info":
-        from .core.io_util import sha256_file
-        from .core.optional import package_version
-
         self_path = Path(sys.argv[0]).resolve() if sys.argv and sys.argv[0] else Path.cwd() / "train_guard.py"
-        digest = None
-        try:
-            if self_path.is_file():
-                digest = sha256_file(self_path)
-        except OSError:
-            pass
-        info = {
-            "name": "Train Guard", "version": __version__,
-            "min_python": f"{__min_python__[0]}.{__min_python__[1]}",
-            "file": self_path.name, "sha256": digest,
-            "commands": ["init", "doctor", "data check", "data inventory", "data compare",
-                         "run watch", "run check", "run compare", "eval", "manifest", "bundle-info"],
-            "optional_dependencies": {
-                "PyYAML": package_version("PyYAML"),
-                "Pillow": package_version("Pillow"),
-                "psutil": package_version("psutil"),
-            },
-            "status_and_exit_codes": STATUS_HELP,
-            "note": "Read-only by default; does not stop training processes.",
-        }
+        info = run_bundle_info(self_path)
+        info["status_and_exit_codes"] = STATUS_HELP
         print(json.dumps(info, ensure_ascii=False, indent=2))
         return EXIT_OK
     print(f"Unknown handler: {handler}", file=sys.stderr)

@@ -46,6 +46,12 @@ class TestInit(unittest.TestCase):
                 self.assertEqual(check["media"], "media")
                 self.assertNotIn("images_field", check)
                 self.assertNotIn("answer_field", check)
+                self.assertIn("inventory", data["data"])
+                self.assertIn("compare", data["data"])
+                self.assertIn("check", data["run"])
+                self.assertIn("compare", data["run"])
+                self.assertIn("manifest", data)
+                self.assertEqual(data["run"]["check"]["framework"], data["run"]["watch"]["framework"])
 
     def test_init_refuses_then_force_overwrites(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

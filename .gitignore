@@ -18,7 +18,7 @@ htmlcov/
 # Local environments and package output
 .venv/
 venv/
-env/
+/env/
 build/
 dist/
 *.egg-info/
@@ -47,14 +47,15 @@ Thumbs.db
 Desktop.ini
 
 # Local models, datasets, checkpoints, and training output
+# Anchor at repo root so package modules under src/train_guard/data|env stay tracked.
 models/
 model/
-data/
+/data/
 datasets/
 checkpoints/
 outputs/
 saves/
 wandb/
-runs/
+/runs/
 
 # release/ is intentionally NOT ignored: it is the controlled candidate tree.

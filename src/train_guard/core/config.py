@@ -54,7 +54,20 @@ def _template(framework: str) -> Dict[str, Any]:
                 "media": "media",
                 "split": "split",
                 "report_dir": "./reports/data_check",
-            }
+            },
+            "inventory": {
+                "annotation": "./data/train.jsonl",
+                "sample_limit": 1000,
+                "group_id": "group_id",
+                "report_dir": "./reports/data_inventory",
+            },
+            "compare": {
+                "left": "./data/train.jsonl",
+                "right": "./data/val.jsonl",
+                "sample_limit": 1000,
+                "group_id": "group_id",
+                "report_dir": "./reports/data_compare",
+            },
         },
         "run": {
             "watch": {
@@ -66,7 +79,19 @@ def _template(framework: str) -> Dict[str, Any]:
                 "expected_gpus": None,
                 "stale_log_minutes": 15.0,
                 "disk_free_gb_threshold": 10.0,
-            }
+            },
+            "check": {
+                "framework": framework,
+                "output_dir": output_dir,
+                "expected_steps": None,
+                "json_output": "./reports/run_check.json",
+                "html_output": "./reports/run_check.html",
+            },
+            "compare": {
+                "left": output_dir,
+                "right": f"{output_dir}-baseline",
+                "json_output": "./reports/run_compare.json",
+            },
         },
         "eval": {
             "predictions": "./outputs/predictions.jsonl",
@@ -74,6 +99,13 @@ def _template(framework: str) -> Dict[str, Any]:
             "group_id": "group_id",
             "keywords": [],
             "report_dir": "./reports/eval",
+        },
+        "manifest": {
+            "framework": framework,
+            "output_dir": output_dir,
+            "manifest_out": "./reports/run_manifest.json",
+            "expected_steps": None,
+            "seed": None,
         },
     }
 
@@ -222,6 +254,7 @@ SECTION_FIELDS: Dict[tuple[str, ...], Dict[str, tuple[type, ...]]] = {
     },
     ("run", "check"): {
         "output_dir": _t(str),
+        "framework": _t(str),
         "expected_steps": _t(int, type(None)),
         "json_output": _t(str, type(None)),
         "html_output": _t(str, type(None)),
@@ -274,7 +307,10 @@ DEFAULTS: Dict[tuple[str, ...], Dict[str, Any]] = {
         "disk_free_gb_threshold": 10.0,
     },
     ("run", "check"): {
-        "expected_steps": None, "json_output": None, "html_output": None,
+        "framework": "generic",
+        "expected_steps": None,
+        "json_output": None,
+        "html_output": None,
     },
     ("run", "compare"): {"json_output": None},
     ("eval",): {
