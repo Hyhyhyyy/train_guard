@@ -2,6 +2,22 @@
 private/
 reports/
 
+# Local secrets and credentials
+.env
+.env.*
+!.env.example
+.secrets/
+secrets.*
+credentials.*
+*.pem
+*.key
+*.p12
+*.pfx
+*.jks
+*.keystore
+*.kubeconfig
+service-account*.json
+
 # Python caches and test output
 __pycache__/
 *.py[cod]

@@ -16,6 +16,14 @@ SCANNER = ROOT / "scripts" / "privacy_scan.py"
 
 
 class TestPrivacyScanner(unittest.TestCase):
+    def init_repo(self, tree: Path, *paths: str, force: bool = False) -> None:
+        subprocess.run(["git", "init", "-q", str(tree)], check=True, capture_output=True)
+        command = ["git", "-C", str(tree), "add"]
+        if force:
+            command.append("-f")
+        command.extend(paths)
+        subprocess.run(command, check=True, capture_output=True)
+
     def run_scan(self, tree: Path, *args: str) -> subprocess.CompletedProcess[str]:
         return subprocess.run(
             [sys.executable, str(SCANNER), str(tree), *args],
@@ -43,10 +51,17 @@ class TestPrivacyScanner(unittest.TestCase):
             person_field = "full_" + "name"
             user_path = "/" + "root/hidden/input.json"
             (tree / "sample.txt").write_text(
-                "Token=" + secret_value + "\n"
-                + user_path + "\n"
-                + domain_terms + "\n"
-                + person_field + "=" + person_value + "\n",
+                "Token="
+                + secret_value
+                + "\n"
+                + user_path
+                + "\n"
+                + domain_terms
+                + "\n"
+                + person_field
+                + "="
+                + person_value
+                + "\n",
                 encoding="utf-8",
             )
             result = self.run_scan(tree)
@@ -59,7 +74,7 @@ class TestPrivacyScanner(unittest.TestCase):
             self.assertNotIn(person_value, result.stdout + result.stderr)
             self.assertNotIn("diag" + "nosis", result.stdout + result.stderr)
 
-    def test_source_mode_scans_public_entries_and_ignores_local_artifacts(self) -> None:
+    def test_source_mode_scans_only_git_tracked_files(self) -> None:
         with tempfile.TemporaryDirectory(dir=ROOT) as tmp:
             tree = Path(tmp)
             (tree / ".gitignore").write_text("*.log\ncache/\n", encoding="utf-8")
@@ -77,30 +92,47 @@ class TestPrivacyScanner(unittest.TestCase):
             (tree / "outside.txt").write_text(
                 credential_key + "=not-public-value\n", encoding="utf-8"
             )
+            self.init_repo(tree, ".gitignore", "README.md", "src/clean.py")
             result = self.run_source_scan(tree)
             self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+            self.assertIn("candidates=3", result.stdout)
 
             (tree / "scripts").mkdir()
             address = ".".join(("10", "20", "30", "40"))
             (tree / "scripts" / "unsafe.py").write_text(
                 'server = "' + address + '"\n', encoding="utf-8"
             )
+            subprocess.run(
+                ["git", "-C", str(tree), "add", "scripts/unsafe.py"],
+                check=True,
+                capture_output=True,
+            )
             blocked = self.run_source_scan(tree)
             self.assertEqual(blocked.returncode, 1)
             self.assertIn("scripts/unsafe.py:1:R009:server-address", blocked.stdout)
             self.assertNotIn(address, blocked.stdout + blocked.stderr)
 
-    def test_source_mode_blocks_high_risk_trees_even_when_gitignored(self) -> None:
+    def test_source_mode_blocks_tracked_high_risk_trees(self) -> None:
         with tempfile.TemporaryDirectory(dir=ROOT) as tmp:
             tree = Path(tmp)
             (tree / ".gitignore").write_text("legacy/\nprivate/\nreports/\n", encoding="utf-8")
             (tree / "README.md").write_text("Public project\n", encoding="utf-8")
             for name in ("legacy", "private", "reports"):
                 (tree / name).mkdir()
+                (tree / name / "fixture.txt").write_text("synthetic\n", encoding="utf-8")
+            self.init_repo(
+                tree,
+                ".gitignore",
+                "README.md",
+                "legacy/fixture.txt",
+                "private/fixture.txt",
+                "reports/fixture.txt",
+                force=True,
+            )
             result = self.run_source_scan(tree)
             self.assertEqual(result.returncode, 1)
             for name in ("legacy", "private", "reports"):
-                self.assertIn(f"{name}:0:R010:forbidden-source-tree", result.stdout)
+                self.assertIn(f"{name}/fixture.txt:0:R010:forbidden-source-tree", result.stdout)
 
     def test_private_key_is_reported_without_echo(self) -> None:
         with tempfile.TemporaryDirectory(dir=ROOT) as tmp:
@@ -111,6 +143,23 @@ class TestPrivacyScanner(unittest.TestCase):
             self.assertEqual(result.returncode, 1)
             self.assertIn("key.txt:1:R008:private-key", result.stdout)
             self.assertNotIn(marker, result.stdout + result.stderr)
+
+    def test_loopback_address_is_allowed_but_remote_address_is_not(self) -> None:
+        with tempfile.TemporaryDirectory(dir=ROOT) as tmp:
+            tree = Path(tmp)
+            (tree / "local.txt").write_text(
+                'server = "127.0.0.1"\nendpoint = "localhost"\n',
+                encoding="utf-8",
+            )
+            clean = self.run_scan(tree)
+            self.assertEqual(clean.returncode, 0, clean.stdout + clean.stderr)
+
+            address = ".".join(("10", "20", "30", "40"))
+            (tree / "remote.txt").write_text(address + "\n", encoding="utf-8")
+            blocked = self.run_scan(tree)
+            self.assertEqual(blocked.returncode, 1)
+            self.assertIn("remote.txt:1:R009:server-address", blocked.stdout)
+            self.assertNotIn(address, blocked.stdout + blocked.stderr)
 
     def test_allowlist_requires_reason_and_is_exact(self) -> None:
         with tempfile.TemporaryDirectory(dir=ROOT) as tmp:
@@ -136,15 +185,65 @@ class TestPrivacyScanner(unittest.TestCase):
             bad = self.run_scan(tree, "--allowlist", str(allow))
             self.assertEqual(bad.returncode, 2)
 
-    def test_binary_is_not_decoded_or_echoed(self) -> None:
+    def test_allowlist_preserves_dot_prefixed_directory(self) -> None:
         with tempfile.TemporaryDirectory(dir=ROOT) as tmp:
             tree = Path(tmp)
-            (tree / "asset.bin").write_bytes(
-                b"\x00access_" + b"tok" + b"en=hidden-binary-value"
+            workflow = tree / ".github" / "workflows" / "publish.yml"
+            workflow.parent.mkdir(parents=True)
+            workflow.write_text("permissions:\n  id-token: write\n", encoding="utf-8")
+            allow = tree / "allow.json"
+            allow.write_text(
+                json.dumps(
+                    [
+                        {
+                            "path": ".github/workflows/publish.yml",
+                            "rule": "R001",
+                            "reason": "Synthetic OIDC permission fixture.",
+                        }
+                    ]
+                ),
+                encoding="utf-8",
             )
+            self.init_repo(tree, ".github/workflows/publish.yml")
+            result = self.run_scan(
+                tree,
+                "--mode",
+                "source",
+                "--allowlist",
+                str(allow),
+            )
+            self.assertEqual(result.returncode, 0, result.stdout + result.stderr)
+
+    def test_binary_requires_an_exact_allowlist_entry(self) -> None:
+        with tempfile.TemporaryDirectory(dir=ROOT) as tmp:
+            tree = Path(tmp)
+            (tree / "asset.bin").write_bytes(b"\x00access_" + b"tok" + b"en=hidden-binary-value")
             result = self.run_scan(tree)
-            self.assertEqual(result.returncode, 0)
+            self.assertEqual(result.returncode, 1)
+            self.assertIn("asset.bin:0:R011:binary-file", result.stdout)
             self.assertNotIn("hidden-binary-value", result.stdout + result.stderr)
+
+            allow = tree / "allow.json"
+            allow.write_text(
+                json.dumps(
+                    [
+                        {
+                            "path": "asset.bin",
+                            "rule": "R011",
+                            "reason": "Synthetic binary fixture.",
+                        }
+                    ]
+                ),
+                encoding="utf-8",
+            )
+            allowed = self.run_scan(tree, "--allowlist", str(allow))
+            self.assertEqual(allowed.returncode, 0, allowed.stdout + allowed.stderr)
+            self.assertIn("allowed_binary=1", allowed.stdout)
+
+            (tree / "other.bin").write_bytes(b"synthetic" * 1200 + b"\x00")
+            blocked = self.run_scan(tree, "--allowlist", str(allow))
+            self.assertEqual(blocked.returncode, 1)
+            self.assertIn("other.bin:0:R011:binary-file", blocked.stdout)
 
     def test_large_file_blocks_release(self) -> None:
         with tempfile.TemporaryDirectory(dir=ROOT) as tmp:
@@ -176,8 +275,15 @@ class TestPrivacyScanner(unittest.TestCase):
             credential_key = "tok" + "en"
             person_field = "full" + "name"
             (tree / "config.py").write_text(
-                credential_key + ' = "' + secret_value + '"\n'
-                + 'record = {"' + person_field + '": "' + person_value + '"}\n',
+                credential_key
+                + ' = "'
+                + secret_value
+                + '"\n'
+                + 'record = {"'
+                + person_field
+                + '": "'
+                + person_value
+                + '"}\n',
                 encoding="utf-8",
             )
             result = self.run_scan(tree)

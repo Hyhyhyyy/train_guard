@@ -7,6 +7,7 @@ from copy import deepcopy
 from pathlib import Path, PurePosixPath, PureWindowsPath
 from typing import Any, Dict, Mapping, Optional
 
+from .io_util import atomic_write_text
 from .optional import try_import_yaml
 
 
@@ -22,10 +23,7 @@ class ConfigError(ValueError):
         self.location = location
         self.suggestion = suggestion
         super().__init__(
-            f"Configuration error\n"
-            f"Problem: {problem}\n"
-            f"Location: {location}\n"
-            f"Fix: {suggestion}"
+            f"Configuration error\nProblem: {problem}\nLocation: {location}\nFix: {suggestion}"
         )
 
 
@@ -49,6 +47,10 @@ def _template(framework: str) -> Dict[str, Any]:
                 "full_scan": False,
                 "compute_hash": False,
                 "verify_images": True,
+                "max_image_pixels": 50_000_000,
+                "max_media_files": 10_000,
+                "max_scan_bytes": 5 * 1024**3,
+                "allow_external_media": False,
                 "group_id": "group_id",
                 "messages": "messages",
                 "media": "media",
@@ -72,18 +74,29 @@ def _template(framework: str) -> Dict[str, Any]:
         "run": {
             "watch": {
                 "framework": framework,
-                "once": True,
+                "once": False,
                 "interval": 30,
                 "output_dir": output_dir,
                 "log_file": log_file,
                 "expected_gpus": None,
                 "stale_log_minutes": 15.0,
                 "disk_free_gb_threshold": 10.0,
+                "run_id": None,
+                "state_db": None,
+                "webhook_url": None,
+                "prometheus_file": None,
+                "otel_file": None,
+                "reliability": True,
+                "notification_every": 10,
+                "step_stall_seconds": 300.0,
+                "gpu_overheat_celsius": 90.0,
+                "checkpoint_stale_seconds": 1800.0,
             },
             "check": {
                 "framework": framework,
                 "output_dir": output_dir,
                 "expected_steps": None,
+                "training_type": "auto",
                 "json_output": "./reports/run_check.json",
                 "html_output": "./reports/run_check.html",
             },
@@ -99,6 +112,7 @@ def _template(framework: str) -> Dict[str, Any]:
             "references": "./data/references.jsonl",
             "group_id": "group_id",
             "keywords": [],
+            "sample_limit": 1000,
             "report_dir": "./reports/eval",
         },
         "manifest": {
@@ -146,8 +160,7 @@ def write_config_template(path: Path, template: str, force: bool = False) -> Non
             str(path),
             "use .json, or .yaml/.yml when PyYAML is available",
         )
-    path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(text, encoding="utf-8")
+    atomic_write_text(path, text, overwrite=force)
 
 
 def load_config_file(path: Path) -> Dict[str, Any]:
@@ -222,6 +235,10 @@ SECTION_FIELDS: Dict[tuple[str, ...], Dict[str, tuple[type, ...]]] = {
         "full_scan": _t(bool),
         "compute_hash": _t(bool),
         "verify_images": _t(bool),
+        "max_image_pixels": _t(int, type(None)),
+        "max_media_files": _t(int, type(None)),
+        "max_scan_bytes": _t(int, type(None)),
+        "allow_external_media": _t(bool),
         "group_id": _t(str, type(None)),
         "messages": _t(str, type(None)),
         "media": _t(str, type(None)),
@@ -252,11 +269,22 @@ SECTION_FIELDS: Dict[tuple[str, ...], Dict[str, tuple[type, ...]]] = {
         "expected_gpus": _t(int, type(None)),
         "stale_log_minutes": _t(int, float),
         "disk_free_gb_threshold": _t(int, float),
+        "run_id": _t(str, type(None)),
+        "state_db": _t(str, type(None)),
+        "webhook_url": _t(str, type(None)),
+        "prometheus_file": _t(str, type(None)),
+        "otel_file": _t(str, type(None)),
+        "reliability": _t(bool),
+        "notification_every": _t(int),
+        "step_stall_seconds": _t(int, float),
+        "gpu_overheat_celsius": _t(int, float),
+        "checkpoint_stale_seconds": _t(int, float),
     },
     ("run", "check"): {
         "output_dir": _t(str),
         "framework": _t(str),
         "expected_steps": _t(int, type(None)),
+        "training_type": _t(str),
         "json_output": _t(str, type(None)),
         "html_output": _t(str, type(None)),
     },
@@ -276,6 +304,7 @@ SECTION_FIELDS: Dict[tuple[str, ...], Dict[str, tuple[type, ...]]] = {
         "predicted_label_field": _t(str, type(None)),
         "keywords": _t(list),
         "report_dir": _t(str),
+        "sample_limit": _t(int, type(None)),
     },
     ("manifest",): {
         "output_dir": _t(str),
@@ -289,40 +318,77 @@ SECTION_FIELDS: Dict[tuple[str, ...], Dict[str, tuple[type, ...]]] = {
 DEFAULTS: Dict[tuple[str, ...], Dict[str, Any]] = {
     ("doctor",): {"model_path": None, "expected_gpus": None, "json_output": None},
     ("data", "check"): {
-        "data_root": None, "sample_limit": 1000, "full_scan": False,
-        "compute_hash": False, "verify_images": True, "group_id": "group_id",
-        "messages": "messages", "media": "media", "split": "split",
-        "report_dir": "reports/data_check", "cache_db": None,
+        "data_root": None,
+        "sample_limit": 1000,
+        "full_scan": False,
+        "compute_hash": False,
+        "verify_images": True,
+        "max_image_pixels": 50_000_000,
+        "max_media_files": 10_000,
+        "max_scan_bytes": 5 * 1024**3,
+        "allow_external_media": False,
+        "group_id": "group_id",
+        "messages": "messages",
+        "media": "media",
+        "split": "split",
+        "report_dir": "reports/data_check",
+        "cache_db": None,
     },
     ("data", "inventory"): {
-        "sample_limit": None, "group_id": "group_id",
+        "sample_limit": None,
+        "group_id": "group_id",
         "report_dir": "reports/data_inventory",
     },
     ("data", "compare"): {
-        "sample_limit": None, "group_id": "group_id",
+        "sample_limit": None,
+        "group_id": "group_id",
         "report_dir": "reports/data_compare",
     },
     ("run", "watch"): {
-        "once": False, "interval": 30, "pid": None, "log_file": None,
-        "framework": "generic", "output_dir": "reports/watch",
-        "expected_gpus": None, "stale_log_minutes": 15.0,
+        "once": False,
+        "interval": 30,
+        "pid": None,
+        "log_file": None,
+        "framework": "generic",
+        "output_dir": "reports/watch",
+        "expected_gpus": None,
+        "stale_log_minutes": 15.0,
         "disk_free_gb_threshold": 10.0,
+        "run_id": None,
+        "state_db": None,
+        "webhook_url": None,
+        "prometheus_file": None,
+        "otel_file": None,
+        "reliability": True,
+        "notification_every": 10,
+        "step_stall_seconds": 300.0,
+        "gpu_overheat_celsius": 90.0,
+        "checkpoint_stale_seconds": 1800.0,
     },
     ("run", "check"): {
         "framework": "generic",
         "expected_steps": None,
+        "training_type": "auto",
         "json_output": None,
         "html_output": None,
     },
     ("run", "compare"): {"framework": "generic", "json_output": None},
     ("eval",): {
-        "references": None, "prediction_field": None, "reference_field": None,
-        "group_id": "group_id", "label_field": None,
-        "predicted_label_field": None, "keywords": [], "report_dir": "reports/eval",
+        "references": None,
+        "prediction_field": None,
+        "reference_field": None,
+        "group_id": "group_id",
+        "label_field": None,
+        "predicted_label_field": None,
+        "keywords": [],
+        "sample_limit": 1000,
+        "report_dir": "reports/eval",
     },
     ("manifest",): {
-        "framework": "generic", "manifest_out": None,
-        "expected_steps": None, "seed": None,
+        "framework": "generic",
+        "manifest_out": None,
+        "expected_steps": None,
+        "seed": None,
     },
 }
 
@@ -337,9 +403,23 @@ REQUIRED: Dict[tuple[str, ...], tuple[str, ...]] = {
 }
 
 PATH_FIELDS = {
-    "model_path", "json_output", "annotation", "data_root", "report_dir",
-    "cache_db", "left", "right", "log_file", "output_dir", "html_output",
-    "predictions", "references", "manifest_out",
+    "model_path",
+    "json_output",
+    "annotation",
+    "data_root",
+    "report_dir",
+    "cache_db",
+    "left",
+    "right",
+    "log_file",
+    "output_dir",
+    "html_output",
+    "predictions",
+    "references",
+    "manifest_out",
+    "state_db",
+    "prometheus_file",
+    "otel_file",
 }
 
 
@@ -368,7 +448,7 @@ def validate_config(data: Mapping[str, Any], path: Path) -> None:
         raise ConfigError(
             "required field 'schema_version' is missing",
             _location(path, ("schema_version",)),
-            f"add \"schema_version\": {SCHEMA_VERSION}",
+            f'add "schema_version": {SCHEMA_VERSION}',
         )
     version = data["schema_version"]
     if not isinstance(version, int) or isinstance(version, bool):
@@ -407,10 +487,10 @@ def validate_config(data: Mapping[str, Any], path: Path) -> None:
                 f"remove it; allowed fields are: {', '.join(sorted(allowed))}",
             )
 
-    for parts, fields in SECTION_FIELDS.items():
+    for section_parts, fields in SECTION_FIELDS.items():
         section: Any = data
         present = True
-        for part in parts:
+        for part in section_parts:
             if not isinstance(section, dict) or part not in section:
                 present = False
                 break
@@ -419,8 +499,8 @@ def validate_config(data: Mapping[str, Any], path: Path) -> None:
             continue
         if not isinstance(section, dict):
             raise ConfigError(
-                f"{'.'.join(parts)!r} must be an object",
-                _location(path, parts),
+                f"{'.'.join(section_parts)!r} must be an object",
+                _location(path, section_parts),
                 "replace it with an object containing command settings",
             )
         unknown = sorted(set(section) - set(fields))
@@ -428,7 +508,7 @@ def validate_config(data: Mapping[str, Any], path: Path) -> None:
             key = unknown[0]
             raise ConfigError(
                 f"unknown field {key!r}",
-                _location(path, parts + (key,)),
+                _location(path, section_parts + (key,)),
                 f"remove it; allowed fields are: {', '.join(sorted(fields))}",
             )
         for key, value in section.items():
@@ -436,14 +516,45 @@ def validate_config(data: Mapping[str, Any], path: Path) -> None:
                 names = ", ".join(t.__name__ for t in fields[key])
                 raise ConfigError(
                     f"field {key!r} has type {type(value).__name__}; expected {names}",
-                    _location(path, parts + (key,)),
+                    _location(path, section_parts + (key,)),
                     f"set {key!r} to a value of the expected type",
                 )
             if key == "keywords" and not all(isinstance(item, str) for item in value):
                 raise ConfigError(
                     "'keywords' entries must all be strings",
-                    _location(path, parts + (key,)),
+                    _location(path, section_parts + (key,)),
                     "remove or quote non-string entries",
+                )
+            if (
+                key
+                in {
+                    "max_image_pixels",
+                    "max_media_files",
+                    "max_scan_bytes",
+                    "notification_every",
+                    "step_stall_seconds",
+                    "gpu_overheat_celsius",
+                    "checkpoint_stale_seconds",
+                }
+                and value is not None
+                and value <= 0
+            ):
+                raise ConfigError(
+                    f"field {key!r} must be positive or null",
+                    _location(path, section_parts + (key,)),
+                    f"set {key!r} to a positive integer, or null to disable the budget",
+                )
+            if key == "training_type" and str(value).lower() not in {
+                "auto",
+                "peft",
+                "lora",
+                "qlora",
+                "full",
+            }:
+                raise ConfigError(
+                    f"unsupported training_type {value!r}",
+                    _location(path, section_parts + (key,)),
+                    "choose auto, peft, lora, qlora, or full",
                 )
 
 
@@ -507,24 +618,38 @@ def resolve_command_config(
     return result
 
 
-def deep_merge(base: Dict[str, Any], override: Mapping[str, Any]) -> Dict[str, Any]:
-    """Compatibility helper for callers that need recursive dictionary merge."""
-    result = dict(base)
-    for key, value in override.items():
-        if key in result and isinstance(result[key], dict) and isinstance(value, Mapping):
-            result[key] = deep_merge(result[key], value)
-        else:
-            result[key] = value
-    return result
-
-
-def merge_cli_config(
-    defaults: Dict[str, Any],
-    config_path: Optional[Path],
-    cli_overrides: Mapping[str, Any],
+def resolve_inline_config(
+    parts: tuple[str, ...],
+    values: Mapping[str, Any],
 ) -> Dict[str, Any]:
-    """Compatibility helper: defaults < file root < non-None CLI values."""
-    merged = dict(defaults)
-    if config_path is not None:
-        merged = deep_merge(merged, load_config_file(config_path))
-    return deep_merge(merged, {k: v for k, v in cli_overrides.items() if v is not None})
+    """Resolve an API mapping with the same defaults and schema as the CLI."""
+    if parts not in SECTION_FIELDS:
+        raise ConfigError(
+            "unsupported command section",
+            f"inline:{'.'.join(parts)}",
+            "use a documented public API command section",
+        )
+    allowed = SECTION_FIELDS[parts]
+    unknown = sorted(set(values) - set(allowed))
+    if unknown:
+        raise ConfigError(
+            "unknown configuration field",
+            f"inline:{'.'.join((*parts, unknown[0]))}",
+            "remove the field or use the documented public field name",
+        )
+    normalized = {
+        key: str(value) if key in PATH_FIELDS and isinstance(value, Path) else value
+        for key, value in values.items()
+    }
+    result = deepcopy(DEFAULTS.get(parts, {}))
+    result.update(normalized)
+
+    document: Dict[str, Any] = {"schema_version": SCHEMA_VERSION}
+    cursor = document
+    for part in parts[:-1]:
+        child: Dict[str, Any] = {}
+        cursor[part] = child
+        cursor = child
+    cursor[parts[-1]] = result
+    validate_config(document, Path("inline-config.json"))
+    return result

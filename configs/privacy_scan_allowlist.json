@@ -1,1 +1,57 @@
-[]
+[
+  {
+    "path": "examples/synthetic_scene.png",
+    "rule": "R011",
+    "reason": "Synthetic, generated example image containing no real-world data."
+  },
+  {
+    "path": ".github/workflows/publish.yml",
+    "rule": "R001",
+    "reason": "GitHub OIDC id-token permission label, not credential material."
+  },
+  {
+    "path": "tests/test_reliability_dashboard.py",
+    "rule": "R009",
+    "reason": "Non-loopback wildcard test input verifies that external dashboard binding is rejected."
+  },
+  {
+    "path": "tests/test_privacy_scan.py",
+    "rule": "R001",
+    "reason": "Synthetic credential patterns verify that the scanner blocks sensitive assignments."
+  },
+  {
+    "path": "release/train_guard.py",
+    "rule": "R001",
+    "reason": "Generated bundle duplicates source modules that are scanned individually before release."
+  },
+  {
+    "path": "src/train_guard/cli.py",
+    "rule": "R001",
+    "reason": "Generates and prints an ephemeral local dashboard authorization value, never a stored credential."
+  },
+  {
+    "path": "src/train_guard/dashboard/__init__.py",
+    "rule": "R001",
+    "reason": "Implements in-memory bearer authorization checks without embedded credential material."
+  },
+  {
+    "path": "src/train_guard/dashboard/assets.py",
+    "rule": "R001",
+    "reason": "Browser client accepts a user-entered ephemeral local authorization value."
+  },
+  {
+    "path": "tests/test_visual_control.py",
+    "rule": "R001",
+    "reason": "Synthetic local authorization values verify dashboard access controls."
+  },
+  {
+    "path": "docs/RELEASE.md",
+    "rule": "R001",
+    "reason": "Documents GitHub OIDC trusted-publisher setup and contains no credential value."
+  },
+  {
+    "path": "train_guard.py",
+    "rule": "R001",
+    "reason": "Release-root generated bundle duplicates source modules scanned before bundling."
+  }
+]

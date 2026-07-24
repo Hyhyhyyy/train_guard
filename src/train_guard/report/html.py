@@ -48,8 +48,8 @@ def render_html_report(
         note = sec.get("note")
         note_html = f'<p class="note">{html_escape(note)}</p>' if note else ""
         sections_html.append(
-            f'<section><h2>{html_escape(sec.get("title", ""))}</h2>{note_html}'
-            f'<table><thead><tr>{thead}</tr></thead><tbody>{"".join(rows)}</tbody></table></section>'
+            f"<section><h2>{html_escape(sec.get('title', ''))}</h2>{note_html}"
+            f"<table><thead><tr>{thead}</tr></thead><tbody>{''.join(rows)}</tbody></table></section>"
         )
     return f"""<!DOCTYPE html>
 <html lang="en">

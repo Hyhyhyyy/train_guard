@@ -55,8 +55,12 @@ def run_doctor(
 
     torch = try_import_torch()
     if torch is None:
-        items.append(CheckItem("pytorch", "WARN", "PyTorch not installed (optional for doctor)", {}))
-        items.append(CheckItem("torch_cuda_available", "WARN", "Cannot check CUDA without PyTorch", {}))
+        items.append(
+            CheckItem("pytorch", "WARN", "PyTorch not installed (optional for doctor)", {})
+        )
+        items.append(
+            CheckItem("torch_cuda_available", "WARN", "Cannot check CUDA without PyTorch", {})
+        )
     else:
         cuda_compiled = getattr(getattr(torch, "version", None), "cuda", None)
         cuda_ok = bool(torch.cuda.is_available())
@@ -79,7 +83,11 @@ def run_doctor(
 
     smi = query_nvidia_smi()
     if smi["ok"]:
-        items.append(CheckItem("nvidia_smi", "PASS", f"nvidia-smi ok, driver {smi.get('driver_version')}", {}))
+        items.append(
+            CheckItem(
+                "nvidia_smi", "PASS", f"nvidia-smi ok, driver {smi.get('driver_version')}", {}
+            )
+        )
         names = [f"{g['index']}:{g['name']}({g['memory_total_mb']:.0f}MB)" for g in smi["gpus"]]
         status = "PASS"
         msg = f"Detected {smi['count']} GPU(s): {', '.join(names)}"
@@ -88,25 +96,57 @@ def run_doctor(
             msg += f"; expected {expected_gpus}"
         items.append(CheckItem("gpus", status, msg, {"count": smi["count"]}))
     else:
-        items.append(CheckItem("nvidia_smi", "WARN", f"nvidia-smi unavailable: {smi.get('error')}", {}))
+        items.append(
+            CheckItem("nvidia_smi", "WARN", f"nvidia-smi unavailable: {smi.get('error')}", {})
+        )
         items.append(CheckItem("gpus", "WARN", "Cannot enumerate GPUs", {}))
 
-    for name in ("transformers", "peft", "datasets", "llamafactory", "torchvision", "torchaudio", "Pillow", "PyYAML", "psutil"):
+    for name in (
+        "transformers",
+        "peft",
+        "datasets",
+        "llamafactory",
+        "torchvision",
+        "torchaudio",
+        "Pillow",
+        "PyYAML",
+        "psutil",
+    ):
         ver = package_version(name)
-        items.append(CheckItem(f"pkg_{name}", "INFO" if ver else "WARN", f"{name}={ver}" if ver else f"{name} not installed", {}))
+        items.append(
+            CheckItem(
+                f"pkg_{name}",
+                "INFO" if ver else "WARN",
+                f"{name}={ver}" if ver else f"{name} not installed",
+                {},
+            )
+        )
 
     if model_path is not None:
         if not model_path.exists():
-            items.append(CheckItem("model_path", "FAIL", f"Model dir missing: {model_path.name}", {}))
+            items.append(
+                CheckItem("model_path", "FAIL", f"Model dir missing: {model_path.name}", {})
+            )
         else:
-            items.append(CheckItem("model_path", "PASS", f"Model dir exists: {model_path.name}", {}))
+            items.append(
+                CheckItem("model_path", "PASS", f"Model dir exists: {model_path.name}", {})
+            )
             config_json = model_path / "config.json"
             if config_json.exists():
                 try:
                     cfg = json.loads(config_json.read_text(encoding="utf-8"))
-                    items.append(CheckItem("model_config", "PASS", f"config.json ok, model_type={cfg.get('model_type')}", {}))
+                    items.append(
+                        CheckItem(
+                            "model_config",
+                            "PASS",
+                            f"config.json ok, model_type={cfg.get('model_type')}",
+                            {},
+                        )
+                    )
                 except (OSError, json.JSONDecodeError) as exc:
-                    items.append(CheckItem("model_config", "FAIL", f"config.json parse error: {exc}", {}))
+                    items.append(
+                        CheckItem("model_config", "FAIL", f"config.json parse error: {exc}", {})
+                    )
             else:
                 items.append(CheckItem("model_config", "WARN", "config.json not found", {}))
             shards = sorted(model_path.glob("*.safetensors"))
@@ -125,18 +165,33 @@ def run_doctor(
                     referenced = sorted(set((index_data.get("weight_map") or {}).values()))
                     missing = [n for n in referenced if not (model_path / n).exists()]
                     if missing:
-                        items.append(CheckItem("safetensors_index", "FAIL", f"Missing {len(missing)} shard(s)", {}))
+                        items.append(
+                            CheckItem(
+                                "safetensors_index", "FAIL", f"Missing {len(missing)} shard(s)", {}
+                            )
+                        )
                     else:
-                        items.append(CheckItem("safetensors_index", "PASS", f"Index references {len(referenced)} complete shard(s)", {}))
+                        items.append(
+                            CheckItem(
+                                "safetensors_index",
+                                "PASS",
+                                f"Index references {len(referenced)} complete shard(s)",
+                                {},
+                            )
+                        )
                 except (OSError, json.JSONDecodeError) as exc:
-                    items.append(CheckItem("safetensors_index", "FAIL", f"Index parse error: {exc}", {}))
+                    items.append(
+                        CheckItem("safetensors_index", "FAIL", f"Index parse error: {exc}", {})
+                    )
 
     for mount in (Path("/"), Path.cwd()):
         usage = get_disk_usage(mount)
         if usage.get("ok"):
             free_gb = usage["free_gb"]
             status = "PASS" if free_gb >= 20 else ("WARN" if free_gb >= 5 else "FAIL")
-            items.append(CheckItem(f"disk_{mount.name or 'root'}", status, f"{mount} free {free_gb} GB", {}))
+            items.append(
+                CheckItem(f"disk_{mount.name or 'root'}", status, f"{mount} free {free_gb} GB", {})
+            )
 
     overall = overall_status(items)
     return redact_value(
@@ -181,8 +236,13 @@ def run_bundle_info(self_path: Path) -> Dict[str, Any]:
             "data inventory",
             "data compare",
             "run watch",
+            "run snapshot",
             "run check",
             "run compare",
+            "run status",
+            "run supervise",
+            "show",
+            "tui",
             "eval",
             "manifest",
             "bundle-info",
@@ -198,5 +258,8 @@ def run_bundle_info(self_path: Path) -> Dict[str, Any]:
             "  python train_guard.py doctor --config train-guard.json\n"
             "Do not auto-install or upgrade torch/CUDA/transformers/peft/LLaMAFactory."
         ),
-        "note": "Read-only by default; does not stop training processes.",
+        "note": (
+            "Read-only by default; process restart requires explicit --restart, "
+            "a bounded budget, and checkpoint validation."
+        ),
     }

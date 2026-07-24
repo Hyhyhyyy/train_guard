@@ -51,7 +51,9 @@ class TestInit(unittest.TestCase):
                 self.assertIn("check", data["run"])
                 self.assertIn("compare", data["run"])
                 self.assertIn("manifest", data)
-                self.assertEqual(data["run"]["check"]["framework"], data["run"]["watch"]["framework"])
+                self.assertEqual(
+                    data["run"]["check"]["framework"], data["run"]["watch"]["framework"]
+                )
 
     def test_init_refuses_then_force_overwrites(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -88,10 +90,13 @@ class TestConfigSchema(unittest.TestCase):
     def test_cli_beats_file_beats_default(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            path = self._write(root, {
-                "schema_version": 1,
-                "run": {"watch": {"interval": 17, "framework": "generic"}},
-            })
+            path = self._write(
+                root,
+                {
+                    "schema_version": 1,
+                    "run": {"watch": {"interval": 17, "framework": "generic"}},
+                },
+            )
             file_result = resolve_command_config(("run", "watch"), path, {})
             self.assertEqual(file_result["interval"], 17)
             self.assertEqual(file_result["disk_free_gb_threshold"], 10.0)
@@ -101,7 +106,7 @@ class TestConfigSchema(unittest.TestCase):
     def test_schema_version_type_and_unknown_field(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            cases = (
+            cases: tuple[tuple[dict[str, object], str], ...] = (
                 ({"doctor": {}}, "schema_version"),
                 ({"schema_version": "1"}, "must be an integer"),
                 ({"schema_version": 99}, "not supported"),
@@ -122,19 +127,20 @@ class TestConfigSchema(unittest.TestCase):
             root = Path(tmp)
             cfg_dir = root / "nested"
             cfg_dir.mkdir()
-            path = self._write(cfg_dir, {
-                "schema_version": 1,
-                "data": {"check": {"annotation": "../data/train.jsonl"}},
-            })
+            path = self._write(
+                cfg_dir,
+                {
+                    "schema_version": 1,
+                    "data": {"check": {"annotation": "../data/train.jsonl"}},
+                },
+            )
             result = resolve_command_config(("data", "check"), path, {})
             self.assertEqual(
                 Path(result["annotation"]),
                 (cfg_dir / "../data/train.jsonl").resolve(),
             )
             cli_path = "./cli/train.jsonl"
-            overridden = resolve_command_config(
-                ("data", "check"), path, {"annotation": cli_path}
-            )
+            overridden = resolve_command_config(("data", "check"), path, {"annotation": cli_path})
             self.assertEqual(overridden["annotation"], cli_path)
 
     def test_windows_and_linux_absolute_paths_are_not_rebased(self) -> None:
@@ -142,10 +148,14 @@ class TestConfigSchema(unittest.TestCase):
             root = Path(tmp)
             values = ("C:\\data\\train.jsonl", "/var/tmp/train.jsonl")
             for index, value in enumerate(values):
-                path = self._write(root, {
-                    "schema_version": 1,
-                    "data": {"check": {"annotation": value}},
-                }, f"path-{index}.json")
+                path = self._write(
+                    root,
+                    {
+                        "schema_version": 1,
+                        "data": {"check": {"annotation": value}},
+                    },
+                    f"path-{index}.json",
+                )
                 result = resolve_command_config(("data", "check"), path, {})
                 self.assertEqual(result["annotation"], value)
 
@@ -160,10 +170,13 @@ class TestConfigSchema(unittest.TestCase):
 
     def test_invalid_config_stops_before_data_read(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
-            path = self._write(Path(tmp), {
-                "schema_version": 1,
-                "data": {"check": {"annotation": "./missing.jsonl", "unknown": 1}},
-            })
+            path = self._write(
+                Path(tmp),
+                {
+                    "schema_version": 1,
+                    "data": {"check": {"annotation": "./missing.jsonl", "unknown": 1}},
+                },
+            )
             stderr = StringIO()
             with mock.patch("train_guard.cli.run_data_check") as data_check:
                 with redirect_stderr(stderr):

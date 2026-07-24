@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import json
 import re
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Sequence
@@ -10,8 +9,9 @@ from typing import Any, Dict, List, Optional, Sequence
 from .. import __version__
 from ..adapters.generic import GenericDatasetAdapter
 from ..adapters.base import FieldMap
-from ..core.io_util import utc_now_iso, write_json
+from ..core.io_util import atomic_write_text, utc_now_iso, write_json
 from ..core.privacy import redact_value
+from ..domain import json_safe
 from ..report.html import render_html_report
 
 
@@ -23,7 +23,9 @@ def normalize_text(text: str) -> str:
     return t
 
 
-def confusion_binary(y_true: Sequence[Any], y_pred: Sequence[Any], positive: Any) -> Dict[str, float]:
+def confusion_binary(
+    y_true: Sequence[Any], y_pred: Sequence[Any], positive: Any
+) -> Dict[str, float]:
     """Binary confusion metrics without sklearn."""
     tp = fp = tn = fn = 0
     for t, p in zip(y_true, y_pred):
@@ -63,26 +65,11 @@ def run_eval(cfg: Dict[str, Any]) -> Dict[str, Any]:
         group_id=str(cfg.get("group_id_field") or "group_id"),
     )
     adapter = GenericDatasetAdapter(fm)
-    preds = list(adapter.iter_records(Path(pred_path), sample_limit=cfg.get("sample_limit")))
-    # For eval we need raw fields — reload simply
-    records = []
-    text = Path(pred_path).read_text(encoding="utf-8")
-    if Path(pred_path).suffix.lower() == ".jsonl":
-        for line in text.splitlines():
-            if line.strip():
-                records.append(json.loads(line))
-    else:
-        data = json.loads(text)
-        records = data if isinstance(data, list) else [data]
+    records = list(adapter.iter_objects(Path(pred_path), sample_limit=cfg.get("sample_limit")))
 
     refs_by_id: Dict[str, Dict[str, Any]] = {}
     if cfg.get("references"):
-        ref_text = Path(cfg["references"]).read_text(encoding="utf-8")
-        if Path(cfg["references"]).suffix.lower() == ".jsonl":
-            ref_recs = [json.loads(l) for l in ref_text.splitlines() if l.strip()]
-        else:
-            ref_data = json.loads(ref_text)
-            ref_recs = ref_data if isinstance(ref_data, list) else [ref_data]
+        ref_recs = adapter.iter_objects(Path(cfg["references"]))
         for i, r in enumerate(ref_recs):
             key = str(r.get(fm.group_id) or r.get("id") or i)
             refs_by_id[key] = r
@@ -109,7 +96,9 @@ def run_eval(cfg: Dict[str, Any]) -> Dict[str, Any]:
             key = str(sample.get(fm.group_id) or sample.get("id") or i)
             ref_sample = refs_by_id.get(key)
             if ref_sample:
-                ref_val = ref_sample.get(ref_field) or ref_sample.get("answer") or ref_sample.get("label")
+                ref_val = (
+                    ref_sample.get(ref_field) or ref_sample.get("answer") or ref_sample.get("label")
+                )
         if ref_val is not None:
             ref_text = str(ref_val)
             text_pairs += 1
@@ -141,10 +130,18 @@ def run_eval(cfg: Dict[str, Any]) -> Dict[str, Any]:
                     break
             if positive is None:
                 positive = unique[-1]
-            classification = {"type": "binary", **confusion_binary(y_true, y_pred, positive), "positive_label": positive}
+            classification = {
+                "type": "binary",
+                **confusion_binary(y_true, y_pred, positive),
+                "positive_label": positive,
+            }
         else:
             correct = sum(1 for t, p in zip(y_true, y_pred) if t == p)
-            classification = {"type": "multiclass", "accuracy": correct / max(len(y_true), 1), "num_labels": len(unique)}
+            classification = {
+                "type": "multiclass",
+                "accuracy": correct / max(len(y_true), 1),
+                "num_labels": len(unique),
+            }
 
     metrics = {
         "total_samples": total,
@@ -156,24 +153,42 @@ def run_eval(cfg: Dict[str, Any]) -> Dict[str, Any]:
         "keyword_hit_rate": keyword_hits / keyword_total if keyword_total else None,
         "classification": classification,
     }
-    overall = "FAIL" if total == 0 else ("WARN" if missing_pred or empty_pred else "PASS")
-    report = {
+    has_references = text_pairs > 0 or bool(y_true)
+    evaluation_mode = "reference_based" if has_references else "prediction_only"
+    overall = (
+        "FAIL"
+        if total == 0
+        else ("WARN" if missing_pred or empty_pred or not has_references else "PASS")
+    )
+    report: Dict[str, Any] = {
         "tool": "train_guard",
         "command": "eval",
         "version": __version__,
         "timestamp": utc_now_iso(),
         "overall_status": overall,
+        "evaluation_mode": evaluation_mode,
         "metrics": metrics,
-        "disclaimer": "Metrics reflect text/label consistency only and do not imply domain validity.",
+        "disclaimer": (
+            "Prediction-only inspection; no references were available for correctness metrics."
+            if not has_references
+            else "Metrics reflect text/label consistency only and do not imply domain validity."
+        ),
     }
+    report = dict(json_safe(redact_value(report)))
     report_dir = Path(cfg.get("report_dir") or "reports/eval")
     report_dir.mkdir(parents=True, exist_ok=True)
-    write_json(report_dir / "eval_report.json", redact_value(report), overwrite=True)
+    write_json(report_dir / "eval_report.json", report, overwrite=True)
     html_doc = render_html_report(
         "Train Guard — Eval Report",
         [{"title": "Status", "value": overall, "status": overall}],
-        [{"title": "Metrics", "headers": ["Key", "Value"], "rows": [[k, v] for k, v in metrics.items() if k != "classification"]}],
+        [
+            {
+                "title": "Metrics",
+                "headers": ["Key", "Value"],
+                "rows": [[k, v] for k, v in metrics.items() if k != "classification"],
+            }
+        ],
         report["disclaimer"],
     )
-    (report_dir / "eval_report.html").write_text(html_doc, encoding="utf-8")
-    return redact_value(report)
+    atomic_write_text(report_dir / "eval_report.html", html_doc, overwrite=True)
+    return report

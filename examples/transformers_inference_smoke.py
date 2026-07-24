@@ -10,7 +10,9 @@ from pathlib import Path
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Run one offline local-model generation")
-    parser.add_argument("--model-path", required=True, help="Relative path to a local model directory")
+    parser.add_argument(
+        "--model-path", required=True, help="Relative path to a local model directory"
+    )
     parser.add_argument("--prompt", default="List three colors.")
     parser.add_argument("--max-new-tokens", type=int, default=32)
     args = parser.parse_args(argv)

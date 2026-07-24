@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import importlib.util
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -45,6 +46,45 @@ class TestReleaseManifest(unittest.TestCase):
             self.assertTrue(any("__pycache__" in path for path in rejected))
             self.assertIn("run.log", rejected)
             self.assertIn("cache.sqlite3", rejected)
+
+    def test_fixed_allowlist_and_sha256_detect_drift(self) -> None:
+        with tempfile.TemporaryDirectory(dir=ROOT) as tmp:
+            tree = Path(tmp)
+            candidate = tree / "train_guard.py"
+            candidate.write_text("print('ok')\n", encoding="utf-8")
+            files, rejected = MODULE.inventory(tree)
+            self.assertEqual(rejected, [])
+            manifest = tree / "manifest.json"
+            MODULE.write_manifest(manifest, files)
+            self.assertEqual(MODULE.load_manifest(manifest), files)
+
+            candidate.write_text("print('changed')\n", encoding="utf-8")
+            changed, _ = MODULE.inventory(tree)
+            self.assertNotEqual(changed["train_guard.py"], files["train_guard.py"])
+
+    def test_manifest_rejects_unsafe_paths_and_bad_hashes(self) -> None:
+        with tempfile.TemporaryDirectory(dir=ROOT) as tmp:
+            manifest = Path(tmp) / "manifest.json"
+            for files in ({"../escape": "0" * 64}, {"safe.py": "not-a-sha256"}):
+                manifest.write_text(
+                    json.dumps({"schema_version": 1, "algorithm": "sha256", "files": files}),
+                    encoding="utf-8",
+                )
+                with self.assertRaises(ValueError):
+                    MODULE.load_manifest(manifest)
+
+            manifest.write_text(
+                json.dumps(
+                    {
+                        "schema_version": 1,
+                        "algorithm": "sha512",
+                        "files": {"safe.py": "0" * 64},
+                    }
+                ),
+                encoding="utf-8",
+            )
+            with self.assertRaises(ValueError):
+                MODULE.load_manifest(manifest)
 
 
 if __name__ == "__main__":

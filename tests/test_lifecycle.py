@@ -16,10 +16,12 @@ if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
 from train_guard.adapters.huggingface import LLaMAFactoryFrameworkAdapter  # noqa: E402
+from train_guard.adapters.huggingface import list_checkpoint_dirs  # noqa: E402
 from train_guard.run.commands import cmd_run_watch, run_manifest, run_run_check, run_run_compare  # noqa: E402
 from train_guard.run.lifecycle import (  # noqa: E402
     PHASE_ABORTED,
     PHASE_FINISHED,
+    PHASE_NONE,
     append_lifecycle_event,
     lifecycle_path,
     make_lifecycle_event,
@@ -31,7 +33,9 @@ class TestLifecycleSchema(unittest.TestCase):
     def test_summarize_start_heartbeat_finish(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             path = lifecycle_path(Path(tmp))
-            append_lifecycle_event(path, make_lifecycle_event("start", framework="huggingface", global_step=0))
+            append_lifecycle_event(
+                path, make_lifecycle_event("start", framework="huggingface", global_step=0)
+            )
             append_lifecycle_event(
                 path,
                 make_lifecycle_event(
@@ -47,7 +51,12 @@ class TestLifecycleSchema(unittest.TestCase):
             )
             append_lifecycle_event(
                 path,
-                make_lifecycle_event("finish", framework="huggingface", global_step=10, checkpoints=["checkpoint-5", "checkpoint-10"]),
+                make_lifecycle_event(
+                    "finish",
+                    framework="huggingface",
+                    global_step=10,
+                    checkpoints=["checkpoint-5", "checkpoint-10"],
+                ),
             )
             summary = summarize_lifecycle(path)
             self.assertEqual(summary["phase"], PHASE_FINISHED)
@@ -65,43 +74,73 @@ class TestLifecycleSchema(unittest.TestCase):
             self.assertEqual(summary["phase"], PHASE_ABORTED)
             self.assertTrue(summary["has_abort"])
 
+    def test_new_watcher_events_do_not_complete_training(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = lifecycle_path(Path(tmp))
+            append_lifecycle_event(path, make_lifecycle_event("watch_start"))
+            append_lifecycle_event(path, make_lifecycle_event("watch_heartbeat"))
+            append_lifecycle_event(path, make_lifecycle_event("watch_stop"))
+            summary = summarize_lifecycle(path)
+            self.assertEqual(summary["phase"], PHASE_NONE)
+            self.assertFalse(summary["has_finish"])
+            self.assertTrue(summary["watcher"]["present"])
+            self.assertFalse(summary["watcher"]["running"])
+
 
 class TestWatchLifecycle(unittest.TestCase):
     def test_watch_once_writes_lifecycle(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             out = Path(tmp) / "run"
             out.mkdir()
-            with mock.patch("train_guard.run.commands.query_nvidia_smi", return_value={"ok": False, "available": False, "gpus": [], "count": 0, "error": "none", "driver_version": None}):
-                code = cmd_run_watch({
-                    "once": True,
-                    "interval": 1,
-                    "output_dir": str(out),
-                    "framework": "huggingface",
-                })
+            with mock.patch(
+                "train_guard.run.watch.query_nvidia_smi",
+                return_value={
+                    "ok": False,
+                    "available": False,
+                    "gpus": [],
+                    "count": 0,
+                    "error": "none",
+                    "driver_version": None,
+                },
+            ):
+                code = cmd_run_watch(
+                    {
+                        "once": True,
+                        "interval": 1,
+                        "output_dir": str(out),
+                        "framework": "huggingface",
+                    }
+                )
             self.assertEqual(code, 0)
             life = lifecycle_path(out)
             self.assertTrue(life.is_file())
             summary = summarize_lifecycle(life)
-            self.assertEqual(summary["phase"], PHASE_FINISHED)
+            self.assertEqual(summary["phase"], PHASE_NONE)
             self.assertGreaterEqual(summary["event_count"], 2)
             report = run_run_check(out, framework="huggingface")
             names = {c["name"]: c["status"] for c in report["checks"]}
-            self.assertEqual(names.get("lifecycle"), "PASS")
+            self.assertEqual(names.get("lifecycle"), "INFO")
 
 
 class TestManifestCompareLifecycle(unittest.TestCase):
     def _seed(self, root: Path) -> Path:
         out = root / "saves"
         out.mkdir(parents=True)
-        (out / "trainer_state.json").write_text(json.dumps({"global_step": 3, "log_history": [{"loss": 1.0}]}), encoding="utf-8")
-        (out / "adapter_config.json").write_text(json.dumps({"peft_type": "LORA"}), encoding="utf-8")
+        (out / "trainer_state.json").write_text(
+            json.dumps({"global_step": 3, "log_history": [{"loss": 1.0}]}), encoding="utf-8"
+        )
+        (out / "adapter_config.json").write_text(
+            json.dumps({"peft_type": "LORA"}), encoding="utf-8"
+        )
         (out / "adapter_model.safetensors").write_bytes(b"w")
         ckpt = out / "checkpoint-3"
         ckpt.mkdir()
         (ckpt / "adapter_model.safetensors").write_bytes(b"c")
         path = lifecycle_path(out)
         append_lifecycle_event(path, make_lifecycle_event("start", global_step=0))
-        append_lifecycle_event(path, make_lifecycle_event("finish", global_step=3, checkpoints=["checkpoint-3"]))
+        append_lifecycle_event(
+            path, make_lifecycle_event("finish", global_step=3, checkpoints=["checkpoint-3"])
+        )
         return out
 
     def test_manifest_includes_lifecycle(self) -> None:
@@ -122,14 +161,30 @@ class TestManifestCompareLifecycle(unittest.TestCase):
 
 
 class TestLLaMAFactoryNested(unittest.TestCase):
+    def test_checkpoint_sort_is_numeric(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            for number in (10, 2, 100):
+                checkpoint = root / f"checkpoint-{number}"
+                checkpoint.mkdir()
+                (checkpoint / "state").write_text("x", encoding="utf-8")
+            self.assertEqual(
+                [path.name for path in list_checkpoint_dirs(root)],
+                ["checkpoint-2", "checkpoint-10", "checkpoint-100"],
+            )
+
     def test_nested_checkpoint_discovery(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp) / "saves"
             nested = root / "example" / "lora"
             ckpt = nested / "checkpoint-2"
             ckpt.mkdir(parents=True)
-            (ckpt / "trainer_state.json").write_text(json.dumps({"global_step": 2}), encoding="utf-8")
-            (ckpt / "adapter_config.json").write_text(json.dumps({"peft_type": "LORA"}), encoding="utf-8")
+            (ckpt / "trainer_state.json").write_text(
+                json.dumps({"global_step": 2}), encoding="utf-8"
+            )
+            (ckpt / "adapter_config.json").write_text(
+                json.dumps({"peft_type": "LORA"}), encoding="utf-8"
+            )
             (ckpt / "adapter_model.safetensors").write_bytes(b"x")
             adapter = LLaMAFactoryFrameworkAdapter()
             state = adapter.locate_trainer_state(root)

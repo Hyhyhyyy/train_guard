@@ -17,13 +17,15 @@ SRC = ROOT / "src"
 if str(SRC) not in sys.path:
     sys.path.insert(0, str(SRC))
 
+from train_guard.adapters.generic import GenericDatasetAdapter  # noqa: E402
 from train_guard.adapters.huggingface import is_bad_loss, parse_training_metrics  # noqa: E402
 from train_guard.cli import main  # noqa: E402
 from train_guard.core.privacy import redact_text  # noqa: E402
 from train_guard.data.commands import run_data_check, run_data_compare, run_data_inventory  # noqa: E402
 from train_guard.env.doctor import run_doctor  # noqa: E402
+from train_guard.eval.metrics import run_eval  # noqa: E402
 from train_guard.report.html import render_html_report  # noqa: E402
-from train_guard.run.commands import query_nvidia_smi, run_manifest, run_run_check  # noqa: E402
+from train_guard.run.commands import query_nvidia_smi, run_manifest, run_run_check, run_run_compare  # noqa: E402
 import train_guard as tg  # noqa: E402
 
 
@@ -54,17 +56,51 @@ class TestDoctor(unittest.TestCase):
         self.assertEqual(ctx.exception.code, 0)
 
     def test_no_gpu(self) -> None:
-        with mock.patch("train_guard.run.commands.run_command", return_value=(127, "", "missing")):
+        with mock.patch("train_guard.run.watch.run_command", return_value=(127, "", "missing")):
             report = run_doctor()
         self.assertIn(report["overall_status"], ("WARN", "FAIL", "PASS"))
 
     def test_three_gpus(self) -> None:
-        with mock.patch("train_guard.run.commands.run_command", return_value=(0, NVIDIA_SMI_3GPU, "")):
+        with mock.patch("train_guard.run.watch.run_command", return_value=(0, NVIDIA_SMI_3GPU, "")):
             info = query_nvidia_smi()
         self.assertEqual(info["count"], 3)
 
 
 class TestDataCommands(unittest.TestCase):
+    def test_jsonl_is_streamed_and_limited(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "records.jsonl"
+            path.write_text("\n".join(json.dumps({"id": i}) for i in range(5)), encoding="utf-8")
+            with mock.patch.object(Path, "read_text", side_effect=AssertionError("not streaming")):
+                records = list(GenericDatasetAdapter().iter_records(path, sample_limit=2))
+            self.assertEqual([record.index for record in records], [0, 1])
+
+    def test_data_root_escape_and_scan_budget_fail(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            media = root / "media"
+            media.mkdir()
+            outside = root / "outside.bin"
+            outside.write_bytes(b"x")
+            inside = media / "large.bin"
+            inside.write_bytes(b"1234")
+            ann = root / "records.jsonl"
+            ann.write_text(
+                json.dumps({"media": ["../outside.bin", "large.bin"], "output": "ok"}) + "\n",
+                encoding="utf-8",
+            )
+            report = run_data_check(
+                {
+                    "annotation": str(ann),
+                    "data_root": str(media),
+                    "verify_images": False,
+                    "max_scan_bytes": 2,
+                }
+            )
+            self.assertEqual(report["overall_status"], "FAIL")
+            self.assertEqual(report["stats"]["media_path_escape"], 1)
+            self.assertEqual(report["stats"]["scan_budget_exceeded"], 1)
+
     def test_check_missing_empty_leak_dup(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -75,8 +111,18 @@ class TestDataCommands(unittest.TestCase):
             (img / "empty.jpg").write_bytes(b"")
             samples = [
                 {"group_id": "G1", "split": "train", "images": ["images/a.jpg"], "answer": "ok"},
-                {"group_id": "G1", "split": "validation", "images": ["images/missing.jpg"], "answer": ""},
-                {"group_id": "G2", "split": "train", "images": ["images/b.jpg", "images/empty.jpg"], "answer": "x"},
+                {
+                    "group_id": "G1",
+                    "split": "validation",
+                    "images": ["images/missing.jpg"],
+                    "answer": "",
+                },
+                {
+                    "group_id": "G2",
+                    "split": "train",
+                    "images": ["images/b.jpg", "images/empty.jpg"],
+                    "answer": "x",
+                },
             ]
             ann = root / "train.json"
             ann.write_text(json.dumps(samples), encoding="utf-8")
@@ -103,13 +149,17 @@ class TestDataCommands(unittest.TestCase):
             left = root / "a.jsonl"
             right = root / "b.jsonl"
             left.write_text(
-                json.dumps({"group_id": "A", "images": ["x.png"], "output": "1"}) + "\n"
-                + json.dumps({"group_id": "B", "images": ["y.png"], "output": "2"}) + "\n",
+                json.dumps({"group_id": "A", "images": ["x.png"], "output": "1"})
+                + "\n"
+                + json.dumps({"group_id": "B", "images": ["y.png"], "output": "2"})
+                + "\n",
                 encoding="utf-8",
             )
             right.write_text(
-                json.dumps({"group_id": "B", "images": ["y.png"], "output": "2"}) + "\n"
-                + json.dumps({"group_id": "C", "images": ["z.png"], "output": "3"}) + "\n",
+                json.dumps({"group_id": "B", "images": ["y.png"], "output": "2"})
+                + "\n"
+                + json.dumps({"group_id": "C", "images": ["z.png"], "output": "3"})
+                + "\n",
                 encoding="utf-8",
             )
             inv = run_data_inventory({"annotation": str(left)})
@@ -133,7 +183,9 @@ class TestRunCheck(unittest.TestCase):
             ],
         }
         (out / "trainer_state.json").write_text(json.dumps(state), encoding="utf-8")
-        (out / "adapter_config.json").write_text(json.dumps({"peft_type": "LORA", "r": 8}), encoding="utf-8")
+        (out / "adapter_config.json").write_text(
+            json.dumps({"peft_type": "LORA", "r": 8}), encoding="utf-8"
+        )
         (out / "adapter_model.safetensors").write_bytes(b"weights")
         (ckpt / "adapter_model.safetensors").write_bytes(b"ckpt")
         return out
@@ -152,15 +204,106 @@ class TestRunCheck(unittest.TestCase):
     def test_manifest(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             out = self._ok_run(Path(tmp), 10)
-            man = run_manifest({"output_dir": str(out), "framework": "huggingface", "manifest_out": str(Path(tmp) / "m.json")})
+            man = run_manifest(
+                {
+                    "output_dir": str(out),
+                    "framework": "huggingface",
+                    "manifest_out": str(Path(tmp) / "m.json"),
+                }
+            )
             self.assertIn("experiment_fingerprint", man)
             self.assertTrue((Path(tmp) / "m.json").exists())
+
+    def test_full_training_does_not_require_adapter(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / "full"
+            out.mkdir()
+            (out / "trainer_state.json").write_text(
+                json.dumps({"global_step": 1, "log_history": [{"loss": 1.0}]}),
+                encoding="utf-8",
+            )
+            (out / "model.safetensors").write_bytes(b"weights")
+            report = run_run_check(out, training_type="full")
+            checks = {item["name"]: item["status"] for item in report["checks"]}
+            self.assertEqual(checks["adapter_config"], "INFO")
+            self.assertEqual(checks["model_weights"], "PASS")
+            self.assertNotEqual(report["overall_status"], "FAIL")
+
+    def test_compare_and_manifest_reject_invalid_inputs(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            valid = self._ok_run(root)
+            missing = root / "missing"
+            comparison = run_run_compare(valid, missing)
+            self.assertEqual(comparison["overall_status"], "FAIL")
+            self.assertEqual(comparison["right"]["input_status"], "invalid")
+            manifest = run_manifest({"output_dir": str(missing)})
+            self.assertEqual(manifest["overall_status"], "FAIL")
+            self.assertIsNone(manifest["experiment_fingerprint"])
+            corrupt = root / "corrupt"
+            corrupt.mkdir()
+            (corrupt / "trainer_state.json").write_text("{broken", encoding="utf-8")
+            self.assertEqual(
+                run_run_compare(valid, corrupt)["overall_status"],
+                "FAIL",
+            )
+            self.assertEqual(
+                run_manifest(
+                    {
+                        "output_dir": str(corrupt),
+                        "manifest_out": str(root / "corrupt-manifest.json"),
+                    }
+                )["overall_status"],
+                "FAIL",
+            )
+            with mock.patch("builtins.print"):
+                self.assertEqual(
+                    main(["manifest", "--output-dir", str(missing)]),
+                    2,
+                )
+                self.assertEqual(
+                    main(
+                        [
+                            "run",
+                            "compare",
+                            "--left",
+                            str(valid),
+                            "--right",
+                            str(missing),
+                        ]
+                    ),
+                    2,
+                )
+
+    def test_eval_honors_sample_limit(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            predictions = root / "predictions.jsonl"
+            predictions.write_text(
+                "\n".join(
+                    json.dumps({"prediction": str(i), "reference": str(i)}) for i in range(3)
+                ),
+                encoding="utf-8",
+            )
+            report = run_eval(
+                {
+                    "predictions": str(predictions),
+                    "sample_limit": 1,
+                    "report_dir": str(root / "report"),
+                }
+            )
+            self.assertEqual(report["metrics"]["total_samples"], 1)
 
 
 class TestPrivacyAndReports(unittest.TestCase):
     def test_html_escape(self) -> None:
         dangerous = '<script>alert("x")</script>'
-        doc = render_html_report(dangerous, [{"title": dangerous, "value": dangerous, "status": "FAIL"}], [{"title": dangerous, "headers": [dangerous], "rows": [[dangerous]]}], dangerous)
+        doc = render_html_report(
+            dangerous,
+            [{"title": dangerous, "value": dangerous, "status": "FAIL"}],
+            [{"title": dangerous, "headers": [dangerous], "rows": [[dangerous]]}],
+            dangerous,
+        )
         self.assertNotIn("<script>", doc)
         self.assertIn("&lt;script&gt;", doc)
 
@@ -172,13 +315,24 @@ class TestPrivacyAndReports(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp:
             ann = Path(tmp) / "a.json"
             ann.write_text("[]", encoding="utf-8")
-            code = main(["precheck", "--annotation", str(ann), "--data-root", tmp, "--no-verify-images", "--report-dir", str(Path(tmp) / "r")])
+            code = main(
+                [
+                    "precheck",
+                    "--annotation",
+                    str(ann),
+                    "--data-root",
+                    tmp,
+                    "--no-verify-images",
+                    "--report-dir",
+                    str(Path(tmp) / "r"),
+                ]
+            )
             self.assertIn(code, (0, 1, 2))
 
 
 class TestVersion(unittest.TestCase):
     def test_version(self) -> None:
-        self.assertTrue(tg.__version__.startswith("0.5"))
+        self.assertEqual(tg.__version__, "0.6.0rc1")
 
 
 @unittest.skipUnless(False, "NCCL smoke is optional; covered by examples script when GPUs exist")

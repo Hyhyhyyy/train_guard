@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import logging
 import sys
@@ -11,9 +12,11 @@ from pathlib import Path
 from typing import Any, Optional, Sequence
 
 from . import __min_python__, __version__
+from ._compat import LEGACY_HANDLERS, deprecation_message
+from .cli_parser import HANDLER_SECTIONS, STATUS_HELP, build_parser
+from .control import ControlToken
 from .core.config import (
     ConfigError,
-    TEMPLATE_NAMES,
     resolve_command_config,
     write_config_template,
 )
@@ -24,230 +27,36 @@ from .core.exitcodes import (
     EXIT_REFUSED,
     EXIT_RUNTIME,
     EXIT_USAGE,
+    EXIT_WARN,
 )
-from .core.io_util import write_json
+from .core.io_util import atomic_write_text, write_json
 from .data.commands import run_data_check, run_data_compare, run_data_inventory, write_data_reports
+from .dashboard import serve as serve_dashboard
 from .env.doctor import run_bundle_info, run_doctor, status_to_exit
 from .eval.metrics import run_eval
 from .report.html import render_html_report
 from .run.commands import cmd_run_watch, run_manifest, run_run_check, run_run_compare
-
-
-STATUS_HELP = (
-    "Results: PASS=checks passed (exit 0), WARN=review recommended (exit 1), "
-    "FAIL=check failed (exit 2). Usage=3, configuration=4, runtime=5, refused overwrite=6."
+from .state import AuditLog, StateStore
+from .status import build_status_snapshot
+from .supervisor import (
+    FileCheckpointValidator,
+    FileHeartbeatProbe,
+    ProcessSpec,
+    RecoveryGuard,
+    RecoveryPolicy,
+    supervise,
 )
-
-
-class TrainGuardArgumentParser(argparse.ArgumentParser):
-    """Argparse with the same actionable error contract as config validation."""
-
-    def error(self, message: str) -> None:
-        self.print_usage(sys.stderr)
-        self.exit(
-            EXIT_USAGE,
-            "FAIL\n"
-            f"Problem: {message}\n"
-            "Location: command line\n"
-            "Fix: review the command help and correct the shown option\n",
-        )
+from .tui import run_tui
 
 
 def setup_logging(verbose: bool = False) -> None:
-    """Configure logging."""
+    """Configure CLI logging."""
     logging.basicConfig(
         level=logging.DEBUG if verbose else logging.INFO,
         format="%(asctime)s [%(levelname)s] %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
         force=True,
     )
-
-
-def _warn_deprecated(old: str, new: str) -> None:
-    print(f"[DEPRECATED] {old} → {new}; see docs/MIGRATION.md", file=sys.stderr)
-
-
-def _configured(parser: argparse.ArgumentParser) -> None:
-    parser.add_argument(
-        "--config",
-        type=Path,
-        help="JSON config (YAML also works when PyYAML is installed)",
-    )
-
-
-def _add(
-    parser: argparse.ArgumentParser,
-    *flags: str,
-    **kwargs: Any,
-) -> None:
-    kwargs.setdefault("default", argparse.SUPPRESS)
-    parser.add_argument(*flags, **kwargs)
-
-
-def _data_check_args(parser: argparse.ArgumentParser) -> None:
-    _configured(parser)
-    _add(parser, "--data-root")
-    _add(parser, "--annotation")
-    _add(parser, "--sample-limit", type=int)
-    _add(parser, "--full-scan", action=argparse.BooleanOptionalAction)
-    _add(parser, "--compute-hash", action=argparse.BooleanOptionalAction)
-    _add(parser, "--verify-images", action=argparse.BooleanOptionalAction)
-    _add(parser, "--group-id-field", dest="group_id")
-    _add(parser, "--split-field", dest="split")
-    _add(parser, "--media-field", dest="media")
-    _add(parser, "--messages-field", dest="messages")
-    _add(parser, "--report-dir")
-    _add(parser, "--cache-db")
-
-
-def _run_watch_args(parser: argparse.ArgumentParser) -> None:
-    _configured(parser)
-    _add(parser, "--once", action=argparse.BooleanOptionalAction)
-    _add(parser, "--interval", type=int)
-    _add(parser, "--pid", type=int)
-    _add(parser, "--log-file")
-    _add(parser, "--framework", choices=("generic", "huggingface", "transformers", "llamafactory"))
-    _add(parser, "--output-dir")
-    _add(parser, "--expected-gpus", type=int)
-    _add(parser, "--stale-log-minutes", type=float)
-    _add(parser, "--disk-free-gb-threshold", type=float)
-
-
-def _run_check_args(parser: argparse.ArgumentParser) -> None:
-    _configured(parser)
-    _add(parser, "--output-dir")
-    _add(parser, "--framework", choices=("generic", "huggingface", "transformers", "llamafactory"))
-    _add(parser, "--expected-steps", type=int)
-    _add(parser, "--json-output")
-    _add(parser, "--html-output")
-
-
-def _run_compare_args(parser: argparse.ArgumentParser) -> None:
-    _configured(parser)
-    _add(parser, "--left")
-    _add(parser, "--right")
-    _add(parser, "--framework", choices=("generic", "huggingface", "transformers", "llamafactory"))
-    _add(parser, "--json-output")
-
-
-def _eval_args(parser: argparse.ArgumentParser) -> None:
-    _configured(parser)
-    _add(parser, "--predictions")
-    _add(parser, "--references")
-    _add(parser, "--prediction-field")
-    _add(parser, "--reference-field")
-    _add(parser, "--group-id-field", dest="group_id")
-    _add(parser, "--label-field")
-    _add(parser, "--predicted-label-field")
-    _add(parser, "--keywords", help="Comma-separated keywords")
-    _add(parser, "--report-dir")
-
-
-def build_parser() -> argparse.ArgumentParser:
-    """Build the dependency-free argparse parser."""
-    parser = TrainGuardArgumentParser(
-        prog="train-guard",
-        description="Read-only, domain-neutral LLM/VLM training quality checks.",
-        epilog=STATUS_HELP,
-    )
-    parser.add_argument("--version", action="version", version=f"%(prog)s {__version__}")
-    parser.add_argument("-v", "--verbose", action="store_true")
-    sub = parser.add_subparsers(dest="command", required=True)
-
-    p = sub.add_parser("init", help="Generate a validated starter configuration", epilog=STATUS_HELP)
-    p.add_argument("--output", type=Path, default=Path("train-guard.json"))
-    p.add_argument("--template", choices=TEMPLATE_NAMES, default="generic")
-    p.add_argument("--force", action="store_true", help="Overwrite an existing output file")
-    p.set_defaults(_handler="init")
-
-    p = sub.add_parser("doctor", help="Environment and model integrity check", epilog=STATUS_HELP)
-    _configured(p)
-    _add(p, "--model-path")
-    _add(p, "--expected-gpus", type=int)
-    _add(p, "--json-output")
-    p.set_defaults(_handler="doctor")
-
-    p_data = sub.add_parser("data", help="Dataset commands")
-    data_sub = p_data.add_subparsers(dest="data_command", required=True)
-    p = data_sub.add_parser("check", help="Dataset/media/message integrity check", epilog=STATUS_HELP)
-    _data_check_args(p)
-    p.set_defaults(_handler="data_check")
-    p = data_sub.add_parser("inventory", help="Streaming dataset inventory", epilog=STATUS_HELP)
-    _configured(p)
-    _add(p, "--annotation")
-    _add(p, "--sample-limit", type=int)
-    _add(p, "--group-id-field", dest="group_id")
-    _add(p, "--report-dir")
-    p.set_defaults(_handler="data_inventory")
-    p = data_sub.add_parser("compare", help="Compare two annotation files", epilog=STATUS_HELP)
-    _configured(p)
-    _add(p, "--left")
-    _add(p, "--right")
-    _add(p, "--sample-limit", type=int)
-    _add(p, "--group-id-field", dest="group_id")
-    _add(p, "--report-dir")
-    p.set_defaults(_handler="data_compare")
-
-    p_run = sub.add_parser("run", help="Training run commands")
-    run_sub = p_run.add_subparsers(dest="run_command", required=True)
-    p = run_sub.add_parser("watch", help="Read-only training watch", epilog=STATUS_HELP)
-    _run_watch_args(p)
-    p.set_defaults(_handler="run_watch")
-    p = run_sub.add_parser("check", help="Check whether a training run completed", epilog=STATUS_HELP)
-    _run_check_args(p)
-    p.set_defaults(_handler="run_check")
-    p = run_sub.add_parser("compare", help="Compare two run output directories", epilog=STATUS_HELP)
-    _run_compare_args(p)
-    p.set_defaults(_handler="run_compare")
-
-    p = sub.add_parser("eval", help="Evaluate predictions vs references", epilog=STATUS_HELP)
-    _eval_args(p)
-    p.set_defaults(_handler="eval")
-
-    p = sub.add_parser("manifest", help="Write run manifest and experiment fingerprint", epilog=STATUS_HELP)
-    _configured(p)
-    _add(p, "--output-dir")
-    _add(p, "--framework", choices=("generic", "huggingface", "transformers", "llamafactory"))
-    _add(p, "--manifest-out")
-    _add(p, "--expected-steps", type=int)
-    _add(p, "--seed")
-    p.set_defaults(_handler="manifest")
-
-    p = sub.add_parser("bundle-info", help="Show deploy/version info")
-    p.set_defaults(_handler="bundle_info")
-
-    p = sub.add_parser("compare", help="Alias for 'run compare'", epilog=STATUS_HELP)
-    _run_compare_args(p)
-    p.set_defaults(_handler="run_compare")
-
-    aliases = (
-        ("precheck", "legacy_precheck", _data_check_args, "Deprecated alias for 'data check'"),
-        ("monitor", "legacy_monitor", _run_watch_args, "Deprecated alias for 'run watch'"),
-        ("postcheck", "legacy_postcheck", _run_check_args, "Deprecated alias for 'run check'"),
-        ("evaluate", "legacy_evaluate", _eval_args, "Deprecated alias for 'eval'"),
-    )
-    for name, handler, add_args, help_text in aliases:
-        p = sub.add_parser(name, help=help_text, epilog=STATUS_HELP)
-        add_args(p)
-        p.set_defaults(_handler=handler)
-    return parser
-
-
-HANDLER_SECTIONS = {
-    "doctor": ("doctor",),
-    "data_check": ("data", "check"),
-    "legacy_precheck": ("data", "check"),
-    "data_inventory": ("data", "inventory"),
-    "data_compare": ("data", "compare"),
-    "run_watch": ("run", "watch"),
-    "legacy_monitor": ("run", "watch"),
-    "run_check": ("run", "check"),
-    "legacy_postcheck": ("run", "check"),
-    "run_compare": ("run", "compare"),
-    "eval": ("eval",),
-    "legacy_evaluate": ("eval",),
-    "manifest": ("manifest",),
-}
 
 
 def _apply_config(args: argparse.Namespace) -> None:
@@ -272,6 +81,10 @@ def _dataset_cfg(args: argparse.Namespace) -> dict[str, Any]:
         "full_scan": getattr(args, "full_scan", False),
         "compute_hash": getattr(args, "compute_hash", False),
         "verify_images": getattr(args, "verify_images", True),
+        "max_image_pixels": getattr(args, "max_image_pixels", None),
+        "max_media_files": getattr(args, "max_media_files", None),
+        "max_scan_bytes": getattr(args, "max_scan_bytes", None),
+        "allow_external_media": getattr(args, "allow_external_media", False),
         "group_id_field": getattr(args, "group_id", None),
         "split_field": getattr(args, "split", None),
         "media_field": getattr(args, "media", None),
@@ -282,6 +95,11 @@ def _dataset_cfg(args: argparse.Namespace) -> dict[str, Any]:
 
 def _dispatch(args: argparse.Namespace) -> int:
     handler = getattr(args, "_handler", None)
+    legacy_command = getattr(args, "_legacy_command", None)
+    if handler in LEGACY_HANDLERS:
+        legacy_command, handler = LEGACY_HANDLERS[handler]
+    if legacy_command is not None:
+        print(deprecation_message(legacy_command), file=sys.stderr)
     if handler == "init":
         write_config_template(args.output, args.template, args.force)
         print(f"PASS config written: {args.output}")
@@ -292,9 +110,7 @@ def _dispatch(args: argparse.Namespace) -> int:
         print(f"  4. After training: train-guard run check --config {args.output}")
         return EXIT_OK
 
-    if handler in {"legacy_precheck", "data_check"}:
-        if handler == "legacy_precheck":
-            _warn_deprecated("precheck", "data check")
+    if handler == "data_check":
         report = run_data_check(_dataset_cfg(args))
         write_data_reports(report, Path(args.report_dir), "data_check_report")
         print(f"data check — {report['overall_status']}")
@@ -307,41 +123,61 @@ def _dispatch(args: argparse.Namespace) -> int:
         return status_to_exit(report["overall_status"])
 
     if handler == "data_inventory":
-        report = run_data_inventory({
-            "annotation": args.annotation, "sample_limit": args.sample_limit,
-            "group_id_field": args.group_id,
-        })
+        report = run_data_inventory(
+            {
+                "annotation": args.annotation,
+                "sample_limit": args.sample_limit,
+                "group_id_field": args.group_id,
+            }
+        )
         write_data_reports(report, Path(args.report_dir), "data_inventory_report")
         print(json.dumps(report, ensure_ascii=False, indent=2))
         return status_to_exit(report["overall_status"])
 
     if handler == "data_compare":
-        report = run_data_compare({
-            "left": args.left, "right": args.right, "sample_limit": args.sample_limit,
-            "group_id_field": args.group_id,
-        })
+        report = run_data_compare(
+            {
+                "left": args.left,
+                "right": args.right,
+                "sample_limit": args.sample_limit,
+                "group_id_field": args.group_id,
+            }
+        )
         write_data_reports(report, Path(args.report_dir), "data_compare_report")
         print(json.dumps(report, ensure_ascii=False, indent=2))
         return status_to_exit(report["overall_status"])
 
-    if handler in {"legacy_monitor", "run_watch"}:
-        if handler == "legacy_monitor":
-            _warn_deprecated("monitor", "run watch")
-        return cmd_run_watch({
-            "once": args.once, "interval": args.interval, "pid": args.pid,
-            "log_file": args.log_file, "framework": args.framework,
-            "output_dir": args.output_dir, "expected_gpu_count": args.expected_gpus,
-            "stale_log_minutes": args.stale_log_minutes,
-            "disk_free_gb_threshold": args.disk_free_gb_threshold,
-        })
+    if handler in {"run_watch", "run_snapshot"}:
+        return cmd_run_watch(
+            {
+                "once": True if handler == "run_snapshot" else args.once,
+                "interval": args.interval,
+                "pid": args.pid,
+                "log_file": args.log_file,
+                "framework": args.framework,
+                "output_dir": args.output_dir,
+                "expected_gpu_count": args.expected_gpus,
+                "stale_log_minutes": args.stale_log_minutes,
+                "disk_free_gb_threshold": args.disk_free_gb_threshold,
+                "run_id": args.run_id,
+                "state_db": args.state_db,
+                "webhook_url": args.webhook_url,
+                "reliability": args.reliability,
+                "prometheus_file": getattr(args, "prometheus_file", None),
+                "otel_file": getattr(args, "otel_file", None),
+                "notification_every": args.notification_every,
+                "step_stall_seconds": args.step_stall_seconds,
+                "gpu_overheat_celsius": args.gpu_overheat_celsius,
+                "checkpoint_stale_seconds": args.checkpoint_stale_seconds,
+            }
+        )
 
-    if handler in {"legacy_postcheck", "run_check"}:
-        if handler == "legacy_postcheck":
-            _warn_deprecated("postcheck", "run check")
+    if handler == "run_check":
         report = run_run_check(
             Path(args.output_dir),
             expected_steps=args.expected_steps,
             framework=getattr(args, "framework", None) or "huggingface",
+            training_type=getattr(args, "training_type", "auto"),
         )
         print("=" * 60)
         print(f"run check — {report['overall_status']}")
@@ -355,16 +191,32 @@ def _dispatch(args: argparse.Namespace) -> int:
         if args.html_output:
             html_doc = render_html_report(
                 "Train Guard — Run Check",
-                [{"title": "Status", "value": report["overall_status"], "status": report["overall_status"]}],
                 [
-                    {"title": "Checks", "headers": ["Status", "Name", "Message"], "rows": [[c["status"], c["name"], c["message"]] for c in report.get("checks") or []]},
-                    {"title": "Reasons", "headers": ["Reason"], "rows": [[r] for r in report.get("reasons") or []]},
+                    {
+                        "title": "Status",
+                        "value": report["overall_status"],
+                        "status": report["overall_status"],
+                    }
+                ],
+                [
+                    {
+                        "title": "Checks",
+                        "headers": ["Status", "Name", "Message"],
+                        "rows": [
+                            [c["status"], c["name"], c["message"]]
+                            for c in report.get("checks") or []
+                        ],
+                    },
+                    {
+                        "title": "Reasons",
+                        "headers": ["Reason"],
+                        "rows": [[r] for r in report.get("reasons") or []],
+                    },
                 ],
                 report.get("disclaimer") or "",
             )
             path = Path(args.html_output)
-            path.parent.mkdir(parents=True, exist_ok=True)
-            path.write_text(html_doc, encoding="utf-8")
+            atomic_write_text(path, html_doc, overwrite=True)
             print(f"HTML: {args.html_output}")
         return status_to_exit(report["overall_status"])
 
@@ -377,22 +229,133 @@ def _dispatch(args: argparse.Namespace) -> int:
         print(json.dumps(report, ensure_ascii=False, indent=2))
         if args.json_output:
             write_json(Path(args.json_output), report, overwrite=True)
-        return EXIT_OK
+        return status_to_exit(report["overall_status"])
 
-    if handler in {"legacy_evaluate", "eval"}:
-        if handler == "legacy_evaluate":
-            _warn_deprecated("evaluate", "eval")
+    if handler == "run_status":
+        with StateStore(args.state_db) as store:
+            snapshot = build_status_snapshot(store, args.run_id).to_dict()
+        print(json.dumps(snapshot, ensure_ascii=False, indent=2, allow_nan=False))
+        if args.json_output:
+            write_json(args.json_output, snapshot, overwrite=True)
+        severities = {
+            str((alert.get("event") or {}).get("severity"))
+            for alert in snapshot.get("active_alerts", ())
+            if isinstance(alert, dict)
+        }
+        if snapshot.get("phase") in {"aborted", "watch_error"} or severities.intersection(
+            {"error", "critical"}
+        ):
+            return EXIT_FAIL
+        return EXIT_WARN if "warning" in severities else EXIT_OK
+
+    if handler == "run_supervise":
+        command = list(args.training_command)
+        if command and command[0] == "--":
+            command = command[1:]
+        if not command:
+            raise ValueError("a training command is required after '--'")
+        if args.max_restarts < 0 or args.restart_window_seconds <= 0:
+            raise ValueError("restart limits must be non-negative and window positive")
+        if (
+            getattr(args, "health_max_age", 30.0) <= 0
+            or getattr(args, "health_timeout", 120.0) <= 0
+            or getattr(args, "health_interval", 2.0) <= 0
+        ):
+            raise ValueError("health probe intervals must be positive")
+        if args.restart and (
+            args.max_restarts < 1
+            or args.checkpoint_dir is None
+            or not args.required_checkpoint_file
+        ):
+            raise ValueError(
+                "--restart requires --max-restarts >= 1, --checkpoint-dir, "
+                "and at least one --required-checkpoint-file"
+            )
+        audit_log = AuditLog(args.audit_log)
+        state_db = getattr(args, "state_db", None) or args.audit_log.with_suffix(".sqlite")
+        run_id = getattr(args, "run_id", None) or (
+            "supervise-" + hashlib.sha256("\0".join(command).encode("utf-8")).hexdigest()[:12]
+        )
+        with StateStore(state_db) as recovery_store:
+            stored_times = recovery_store.get_run_state(run_id, "supervisor.restart_times", [])
+            restart_times = (
+                [float(value) for value in stored_times] if isinstance(stored_times, list) else []
+            )
+            recovery_guard = RecoveryGuard(
+                RecoveryPolicy(
+                    max_restarts=args.max_restarts,
+                    window_seconds=args.restart_window_seconds,
+                    probe_timeout_seconds=getattr(args, "health_timeout", 120.0),
+                    probe_interval_seconds=getattr(args, "health_interval", 2.0),
+                ),
+                restart_times=restart_times,
+                on_change=lambda values: recovery_store.set_run_state(
+                    run_id, "supervisor.restart_times", list(values)
+                ),
+            )
+            result = supervise(
+                ProcessSpec(command[0], tuple(command[1:])),
+                restart_enabled=bool(args.restart),
+                recovery_guard=recovery_guard,
+                checkpoint_path=args.checkpoint_dir,
+                checkpoint_validator=(
+                    FileCheckpointValidator(args.required_checkpoint_file)
+                    if args.required_checkpoint_file
+                    else None
+                ),
+                health_probe=(
+                    FileHeartbeatProbe(
+                        args.health_file,
+                        getattr(args, "health_max_age", 30.0),
+                    )
+                    if getattr(args, "health_file", None)
+                    else None
+                ),
+                audit=audit_log.append,
+                run_id=run_id,
+                control_store=recovery_store,
+                control_enabled=bool(getattr(args, "enable_control", False)),
+            )
+        print(
+            json.dumps(
+                {
+                    "exit_code": result.exit_code,
+                    "restart_count": result.restart_count,
+                    "stopped_reason": result.stopped_reason,
+                    "checkpoint_errors": list(result.checkpoint_errors),
+                    "audit_log": args.audit_log.name,
+                    "state_db": state_db.name,
+                    "run_id": run_id,
+                    "control_enabled": bool(getattr(args, "enable_control", False)),
+                },
+                ensure_ascii=False,
+                indent=2,
+            )
+        )
+        return (
+            EXIT_OK
+            if result.exit_code == 0 or result.stopped_reason.startswith("control_")
+            else EXIT_FAIL
+        )
+
+    if handler == "eval":
         keywords = args.keywords
         if isinstance(keywords, str):
             keywords = [item.strip() for item in keywords.split(",") if item.strip()]
-        report = run_eval({
-            "predictions": args.predictions, "references": args.references,
-            "prediction_field": args.prediction_field,
-            "reference_field": args.reference_field,
-            "group_id_field": args.group_id, "label_field": args.label_field,
-            "predicted_label_field": args.predicted_label_field,
-            "keywords": keywords, "report_dir": args.report_dir,
-        })
+        report = run_eval(
+            {
+                "predictions": args.predictions,
+                "references": args.references,
+                "prediction_field": args.prediction_field,
+                "reference_field": args.reference_field,
+                "group_id_field": args.group_id,
+                "label_field": args.label_field,
+                "predicted_label_field": args.predicted_label_field,
+                "keywords": keywords,
+                "sample_limit": args.sample_limit,
+                "report_dir": args.report_dir,
+            }
+        )
         print(f"eval — {report['overall_status']}")
         print(report.get("disclaimer"))
         return status_to_exit(report["overall_status"])
@@ -412,19 +375,54 @@ def _dispatch(args: argparse.Namespace) -> int:
         return status_to_exit(report["overall_status"])
 
     if handler == "manifest":
-        report = run_manifest({
-            "output_dir": args.output_dir, "framework": args.framework,
-            "manifest_out": args.manifest_out, "expected_steps": args.expected_steps,
-            "seed": args.seed,
-        })
+        report = run_manifest(
+            {
+                "output_dir": args.output_dir,
+                "framework": args.framework,
+                "manifest_out": args.manifest_out,
+                "expected_steps": args.expected_steps,
+                "seed": args.seed,
+            }
+        )
         print(json.dumps(report, ensure_ascii=False, indent=2))
-        return EXIT_OK
+        return status_to_exit(report["overall_status"])
 
     if handler == "bundle_info":
-        self_path = Path(sys.argv[0]).resolve() if sys.argv and sys.argv[0] else Path.cwd() / "train_guard.py"
+        self_path = (
+            Path(sys.argv[0]).resolve()
+            if sys.argv and sys.argv[0]
+            else Path.cwd() / "train_guard.py"
+        )
         info = run_bundle_info(self_path)
         info["status_and_exit_codes"] = STATUS_HELP
         print(json.dumps(info, ensure_ascii=False, indent=2))
+        return EXIT_OK
+    if handler == "show":
+        if args.port < 1 or args.port > 65535:
+            raise ValueError("port must be between 1 and 65535")
+        enable_control = bool(getattr(args, "enable_control", False))
+        authorization = ControlToken() if enable_control else None
+        with StateStore(args.state_db) as store:
+            print(f"Dashboard: http://{args.host}:{args.port}")
+            if authorization is not None:
+                print(f"One-time local authorization: {authorization.plain}")
+            if enable_control:
+                serve_dashboard(
+                    store,
+                    args.host,
+                    args.port,
+                    enable_control=True,
+                    authorization=authorization,
+                )
+            else:
+                serve_dashboard(store, args.host, args.port)
+        return EXIT_OK
+    if handler == "tui":
+        run_tui(
+            args.state_db,
+            run_id=args.run_id,
+            enable_control=bool(args.enable_control),
+        )
         return EXIT_OK
     print(f"Unknown handler: {handler}", file=sys.stderr)
     return EXIT_USAGE
@@ -458,7 +456,10 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         )
         return EXIT_REFUSED
     except (FileNotFoundError, ValueError, RuntimeError) as exc:
-        print(f"FAIL\nProblem: {exc}\nLocation: command input\nFix: correct the path or value and retry", file=sys.stderr)
+        print(
+            f"FAIL\nProblem: {exc}\nLocation: command input\nFix: correct the path or value and retry",
+            file=sys.stderr,
+        )
         return EXIT_FAIL
     except KeyboardInterrupt:
         print("\nInterrupted.", file=sys.stderr)

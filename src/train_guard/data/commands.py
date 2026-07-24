@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import logging
+import warnings
 from collections import Counter, defaultdict
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Set
@@ -12,7 +13,7 @@ from .. import __version__
 from ..adapters.base import FieldMap
 from ..adapters.generic import GenericDatasetAdapter
 from ..core.exitcodes import EXIT_CONFIG, EXIT_FAIL, EXIT_OK, EXIT_USAGE, EXIT_WARN
-from ..core.io_util import sha256_file, utc_now_iso, write_json
+from ..core.io_util import atomic_write_text, sha256_file, utc_now_iso, write_json
 from ..core.optional import try_import_pil
 from ..core.privacy import group_id_hash, redact_value
 from ..report.html import render_html_report
@@ -38,13 +39,27 @@ def run_data_check(cfg: Dict[str, Any]) -> Dict[str, Any]:
     if not annotation:
         raise ValueError("annotation path is required")
     ann_path = Path(annotation)
-    data_root = Path(cfg["data_root"]) if cfg.get("data_root") else ann_path.parent
+    data_root = (Path(cfg["data_root"]) if cfg.get("data_root") else ann_path.parent).resolve()
     sample_limit = cfg.get("sample_limit", 1000)
     if cfg.get("full_scan"):
         sample_limit = None
     max_examples = int(cfg.get("max_examples") or 20)
     compute_hash = bool(cfg.get("compute_hash"))
     verify_images = bool(cfg.get("verify_images", True))
+    max_image_pixels = cfg.get("max_image_pixels", 50_000_000)
+    max_media_files = cfg.get("max_media_files", 10_000)
+    max_scan_bytes = cfg.get("max_scan_bytes", 5 * 1024**3)
+    allow_external_media = bool(cfg.get("allow_external_media", False))
+    max_image_pixels = None if max_image_pixels is None else int(max_image_pixels)
+    max_media_files = None if max_media_files is None else int(max_media_files)
+    max_scan_bytes = None if max_scan_bytes is None else int(max_scan_bytes)
+    for name, value in (
+        ("max_image_pixels", max_image_pixels),
+        ("max_media_files", max_media_files),
+        ("max_scan_bytes", max_scan_bytes),
+    ):
+        if value is not None and value <= 0:
+            raise ValueError(f"{name} must be positive or null")
     Image = try_import_pil() if verify_images else None
     if verify_images and Image is None:
         LOGGER.warning("Pillow not installed; skipping image verify")
@@ -57,6 +72,8 @@ def run_data_check(cfg: Dict[str, Any]) -> Dict[str, Any]:
     adapter = GenericDatasetAdapter(_field_map_from_cfg(cfg))
     if not data_root.exists():
         raise FileNotFoundError(f"data_root does not exist: {data_root}")
+    if not data_root.is_dir():
+        raise ValueError("data_root must be a directory")
 
     issues: Dict[str, List[str]] = defaultdict(list)
     ext_counter: Counter[str] = Counter()
@@ -72,12 +89,18 @@ def run_data_check(cfg: Dict[str, Any]) -> Dict[str, Any]:
         "zero_byte_files": 0,
         "media_checked": 0,
         "media_verify_failed": 0,
+        "media_path_escape": 0,
+        "scan_budget_exceeded": 0,
+        "scan_bytes": 0,
         "duplicate_hash_groups": 0,
         "group_leak_count": 0,
         "pillow_available": Image is not None,
         "hash_enabled": compute_hash,
         "sample_limit": sample_limit,
         "full_scan": bool(cfg.get("full_scan")),
+        "max_image_pixels": max_image_pixels,
+        "max_media_files": max_media_files,
+        "max_scan_bytes": max_scan_bytes,
     }
 
     # Single streaming pass
@@ -107,9 +130,18 @@ def run_data_check(cfg: Dict[str, Any]) -> Dict[str, Any]:
 
         media_per_sample[len(rec.media)] += 1
         for ref in rec.media:
-            p = Path(ref.path)
-            if not p.is_absolute():
-                p = data_root / ref.path
+            candidate = Path(ref.path)
+            p = (candidate if candidate.is_absolute() else data_root / candidate).resolve()
+            if not allow_external_media and not p.is_relative_to(data_root):
+                stats["media_path_escape"] += 1
+                if len(issues["media_path_escape"]) < max_examples:
+                    issues["media_path_escape"].append(f"index={rec.index} media={candidate.name}")
+                continue
+            if max_media_files is not None and stats["media_checked"] >= max_media_files:
+                stats["scan_budget_exceeded"] += 1
+                if len(issues["scan_budget_exceeded"]) < max_examples:
+                    issues["scan_budget_exceeded"].append("media file budget reached")
+                continue
             ext = p.suffix.lower() or "<none>"
             ext_counter[ext] += 1
             stats["media_checked"] += 1
@@ -128,6 +160,12 @@ def run_data_check(cfg: Dict[str, Any]) -> Dict[str, Any]:
                 stats["zero_byte_files"] += 1
                 if len(issues["zero_byte_files"]) < max_examples:
                     issues["zero_byte_files"].append(f"index={rec.index}")
+            if max_scan_bytes is not None and stats["scan_bytes"] + size > max_scan_bytes:
+                stats["scan_budget_exceeded"] += 1
+                if len(issues["scan_budget_exceeded"]) < max_examples:
+                    issues["scan_budget_exceeded"].append("media byte budget reached")
+                continue
+            stats["scan_bytes"] += size
 
             if Image is not None and verify_images and size > 0:
                 cached = cache.get(p, "verify") if cache else None
@@ -135,8 +173,14 @@ def run_data_check(cfg: Dict[str, Any]) -> Dict[str, Any]:
                     ok = bool(cached.get("ok"))
                 else:
                     try:
-                        with Image.open(p) as im:
-                            im.verify()
+                        with warnings.catch_warnings():
+                            warning_type = getattr(Image, "DecompressionBombWarning", Warning)
+                            warnings.simplefilter("error", warning_type)
+                            with Image.open(p) as im:
+                                pixels = int(im.width) * int(im.height)
+                                if max_image_pixels is not None and pixels > max_image_pixels:
+                                    raise ValueError("image pixel budget exceeded")
+                                im.verify()
                         ok = True
                         err = None
                     except Exception as exc:  # noqa: BLE001
@@ -168,9 +212,6 @@ def run_data_check(cfg: Dict[str, Any]) -> Dict[str, Any]:
     else:
         stats["total_samples"] = stats["total_seen"]  # scanned bound
 
-    if cache:
-        cache.close()
-
     leak_examples: List[str] = []
     for gid, splits in group_splits.items():
         normalized = {s.lower() for s in splits}
@@ -188,7 +229,14 @@ def run_data_check(cfg: Dict[str, Any]) -> Dict[str, Any]:
         issues["duplicate_media"].append(f"sha256={h[:12]}… indices={sorted(set(idxs))[:10]}")
 
     overall = "PASS"
-    if stats["missing_media"] or stats["empty_answers"] or stats["group_leak_count"] or stats["zero_byte_files"]:
+    if (
+        stats["missing_media"]
+        or stats["empty_answers"]
+        or stats["group_leak_count"]
+        or stats["zero_byte_files"]
+        or stats["media_path_escape"]
+        or stats["scan_budget_exceeded"]
+    ):
         overall = "FAIL"
     elif stats["media_verify_failed"] or stats["duplicate_hash_groups"] or stats["empty_records"]:
         overall = "WARN"
@@ -294,9 +342,15 @@ def write_data_reports(report: Dict[str, Any], report_dir: Path, stem: str) -> N
     json_path = report_dir / f"{stem}.json"
     write_json(json_path, report, overwrite=True)
     cards = [
-        {"title": "Status", "value": report.get("overall_status"), "status": report.get("overall_status", "INFO")},
+        {
+            "title": "Status",
+            "value": report.get("overall_status"),
+            "status": report.get("overall_status", "INFO"),
+        },
     ]
-    rows = [[k, v] for k, v in report.items() if k not in {"issues"} and not isinstance(v, (dict, list))]
+    rows = [
+        [k, v] for k, v in report.items() if k not in {"issues"} and not isinstance(v, (dict, list))
+    ]
     if isinstance(report.get("stats"), dict):
         rows.extend([[f"stats.{k}", v] for k, v in report["stats"].items()])
     html_doc = render_html_report(
@@ -305,4 +359,4 @@ def write_data_reports(report: Dict[str, Any], report_dir: Path, stem: str) -> N
         [{"title": "Summary", "headers": ["Key", "Value"], "rows": rows}],
         str(report.get("disclaimer") or "Read-only dataset report."),
     )
-    (report_dir / f"{stem}.html").write_text(html_doc, encoding="utf-8")
+    atomic_write_text(report_dir / f"{stem}.html", html_doc, overwrite=True)

@@ -1,0 +1,25 @@
+include LICENSE
+include README.md
+include README_zh-CN.md
+include ARCHITECTURE.md
+include CHANGELOG.md
+include CONTRIBUTING.md
+include SECURITY.md
+include SUPPORT.md
+recursive-include docs *.md
+include configs/example.json
+include configs/example.yaml
+include configs/privacy_scan_allowlist.json
+include configs/release_manifest.json
+include scripts/bundle_singlefile.py
+include scripts/check_release_manifest.py
+include scripts/privacy_scan.py
+recursive-include src/train_guard *.py
+prune .github
+prune benchmarks
+prune build
+prune dist
+prune release
+prune tests
+global-exclude *.py[cod]
+global-exclude __pycache__

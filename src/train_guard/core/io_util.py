@@ -3,14 +3,17 @@
 from __future__ import annotations
 
 import hashlib
+import importlib
 import json
 import os
 import platform
 import shutil
 import subprocess
+import tempfile
+from contextlib import contextmanager
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Any, Dict, Mapping, Sequence, Tuple
+from typing import Any, Dict, Iterator, Mapping, Optional, Sequence, Tuple
 
 
 def utc_now_iso() -> str:
@@ -38,19 +41,113 @@ def run_command(args: Sequence[str], timeout: float = 30.0) -> Tuple[int, str, s
         return 1, "", f"Command failed: {exc}"
 
 
-def write_json(path: Path, data: Any, *, overwrite: bool = False) -> None:
-    """Write UTF-8 JSON (ensure_ascii=False)."""
+def atomic_write_text(
+    path: Path, text: str, *, overwrite: bool = False, encoding: str = "utf-8"
+) -> None:
+    """Atomically replace a text file using a temporary file in the same directory."""
     if path.exists() and not overwrite:
         raise FileExistsError(f"Refusing to overwrite: {path}")
     path.parent.mkdir(parents=True, exist_ok=True)
-    path.write_text(json.dumps(data, ensure_ascii=False, indent=2) + "\n", encoding="utf-8")
+    tmp_name = ""
+    try:
+        with tempfile.NamedTemporaryFile(
+            mode="w",
+            encoding=encoding,
+            dir=str(path.parent),
+            prefix=f".{path.name}.",
+            suffix=".tmp",
+            delete=False,
+        ) as fh:
+            tmp_name = fh.name
+            fh.write(text)
+            fh.flush()
+            os.fsync(fh.fileno())
+        if path.exists() and not overwrite:
+            raise FileExistsError(f"Refusing to overwrite: {path}")
+        os.replace(tmp_name, path)
+        tmp_name = ""
+    finally:
+        if tmp_name:
+            try:
+                os.unlink(tmp_name)
+            except FileNotFoundError:
+                pass
 
 
-def append_jsonl(path: Path, record: Mapping[str, Any]) -> None:
-    """Append one JSONL record."""
+def write_json(path: Path, data: Any, *, overwrite: bool = False) -> None:
+    """Atomically write UTF-8 JSON (ensure_ascii=False)."""
+    atomic_write_text(
+        path,
+        json.dumps(data, ensure_ascii=False, indent=2) + "\n",
+        overwrite=overwrite,
+    )
+
+
+@contextmanager
+def _exclusive_file_lock(path: Path) -> Iterator[None]:
+    """Use a sidecar byte lock for cross-process JSONL writers."""
+    lock_path = path.with_name(f".{path.name}.lock")
+    with lock_path.open("a+b") as handle:
+        handle.seek(0, os.SEEK_END)
+        if handle.tell() == 0:
+            handle.write(b"\0")
+            handle.flush()
+        handle.seek(0)
+        module = importlib.import_module("msvcrt" if os.name == "nt" else "fcntl")
+        if os.name == "nt":
+            module.locking(handle.fileno(), module.LK_LOCK, 1)
+        else:
+            module.flock(handle.fileno(), module.LOCK_EX)
+        try:
+            yield
+        finally:
+            handle.seek(0)
+            if os.name == "nt":
+                module.locking(handle.fileno(), module.LK_UNLCK, 1)
+            else:
+                module.flock(handle.fileno(), module.LOCK_UN)
+
+
+def _rotate_jsonl(path: Path, backup_count: int) -> None:
+    if backup_count <= 0:
+        path.unlink(missing_ok=True)
+        return
+    oldest = path.with_name(f"{path.name}.{backup_count}")
+    oldest.unlink(missing_ok=True)
+    for index in range(backup_count - 1, 0, -1):
+        source = path.with_name(f"{path.name}.{index}")
+        if source.exists():
+            os.replace(source, path.with_name(f"{path.name}.{index + 1}"))
+    if path.exists():
+        os.replace(path, path.with_name(f"{path.name}.1"))
+
+
+def append_jsonl(
+    path: Path,
+    record: Mapping[str, Any],
+    *,
+    max_bytes: Optional[int] = 10 * 1024**2,
+    backup_count: int = 3,
+) -> None:
+    """Append one complete JSONL record with locking and optional rotation."""
     path.parent.mkdir(parents=True, exist_ok=True)
-    with path.open("a", encoding="utf-8") as fh:
-        fh.write(json.dumps(dict(record), ensure_ascii=False) + "\n")
+    payload = (json.dumps(dict(record), ensure_ascii=False) + "\n").encode("utf-8")
+    with _exclusive_file_lock(path):
+        if (
+            max_bytes is not None
+            and max_bytes > 0
+            and path.exists()
+            and path.stat().st_size + len(payload) > max_bytes
+        ):
+            _rotate_jsonl(path, backup_count)
+        fd = os.open(str(path), os.O_APPEND | os.O_CREAT | os.O_WRONLY, 0o600)
+        try:
+            written = os.write(fd, payload)
+            if written != len(payload):
+                raise OSError("short JSONL append")
+            os.fsync(fd)
+        finally:
+            os.close(fd)
 
 
 def sha256_file(path: Path, chunk_size: int = 1024 * 1024) -> str:
@@ -86,7 +183,8 @@ def get_disk_usage(path: Path) -> Dict[str, Any]:
 def get_cpu_load() -> Dict[str, Any]:
     """CPU load averages when available (Unix); Windows returns ok=False."""
     try:
-        load1, load5, load15 = os.getloadavg()
+        getloadavg = getattr(os, "getloadavg")
+        load1, load5, load15 = getloadavg()
         return {"load1": load1, "load5": load5, "load15": load15, "ok": True}
     except (OSError, AttributeError) as exc:
         return {"ok": False, "error": str(exc) or "getloadavg unavailable"}

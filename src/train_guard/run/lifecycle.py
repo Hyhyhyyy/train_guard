@@ -1,4 +1,4 @@
-"""Run lifecycle events: start / heartbeat / checkpoint / finish / abort."""
+"""Separate training lifecycle and watcher observation events."""
 
 from __future__ import annotations
 
@@ -10,9 +10,16 @@ from ..core.io_util import append_jsonl, utc_now_iso
 from ..core.privacy import redact_value
 
 
-LIFECYCLE_SCHEMA_VERSION = 1
+LIFECYCLE_SCHEMA_VERSION = 2
 LIFECYCLE_FILENAME = "train_guard_lifecycle.jsonl"
-EVENT_KINDS = frozenset({"start", "heartbeat", "checkpoint", "finish", "abort"})
+LEGACY_TRAINING_EVENT_KINDS = frozenset({"start", "heartbeat", "checkpoint", "finish", "abort"})
+TRAINING_EVENT_KINDS = frozenset(
+    {"train_start", "train_heartbeat", "train_checkpoint", "train_finish", "train_abort"}
+)
+WATCH_EVENT_KINDS = frozenset(
+    {"watch_start", "watch_heartbeat", "watch_checkpoint", "watch_stop", "watch_error"}
+)
+EVENT_KINDS = LEGACY_TRAINING_EVENT_KINDS | TRAINING_EVENT_KINDS | WATCH_EVENT_KINDS
 
 # Derived run phase from the latest terminal-ish event, else last activity.
 PHASE_NONE = "none"
@@ -101,6 +108,15 @@ def summarize_lifecycle(path: Path) -> Dict[str, Any]:
             "alert_codes": [],
             "has_abort": False,
             "has_finish": False,
+            "has_training_events": False,
+            "watcher": {
+                "present": False,
+                "running": False,
+                "started_at": None,
+                "stopped_at": None,
+                "last_heartbeat_at": None,
+                "has_error": False,
+            },
         }
 
     started_at = None
@@ -111,29 +127,52 @@ def summarize_lifecycle(path: Path) -> Dict[str, Any]:
     alert_codes: List[str] = []
     has_abort = False
     has_finish = False
-    phase = PHASE_RUNNING
+    has_training_events = False
+    phase = PHASE_NONE
+    watch_started_at = None
+    watch_stopped_at = None
+    watch_last_heartbeat_at = None
+    watch_running = False
+    watch_has_error = False
 
     for event in events:
         kind = event.get("kind")
         ts = event.get("timestamp")
-        if kind == "start" and started_at is None:
+        if kind in {"start", "train_start"} and started_at is None:
+            has_training_events = True
             started_at = ts
             phase = PHASE_RUNNING
-        elif kind == "heartbeat":
+        elif kind in {"heartbeat", "train_heartbeat"}:
+            has_training_events = True
             last_heartbeat_at = ts
             if phase not in {PHASE_FINISHED, PHASE_ABORTED}:
                 phase = PHASE_RUNNING
-        elif kind == "checkpoint":
+        elif kind in {"checkpoint", "train_checkpoint"}:
+            has_training_events = True
             if phase not in {PHASE_FINISHED, PHASE_ABORTED}:
                 phase = PHASE_CHECKPOINTED
-        elif kind == "finish":
+        elif kind in {"finish", "train_finish"}:
+            has_training_events = True
             has_finish = True
             finished_at = ts
             phase = PHASE_FINISHED
-        elif kind == "abort":
+        elif kind in {"abort", "train_abort"}:
+            has_training_events = True
             has_abort = True
             finished_at = ts
             phase = PHASE_ABORTED
+        elif kind == "watch_start":
+            watch_started_at = watch_started_at or ts
+            watch_running = True
+        elif kind == "watch_heartbeat":
+            watch_last_heartbeat_at = ts
+        elif kind == "watch_stop":
+            watch_stopped_at = ts
+            watch_running = False
+        elif kind == "watch_error":
+            watch_has_error = True
+            watch_stopped_at = ts
+            watch_running = False
 
         step = event.get("global_step")
         if isinstance(step, int):
@@ -168,6 +207,15 @@ def summarize_lifecycle(path: Path) -> Dict[str, Any]:
         "alert_codes": alert_codes,
         "has_abort": has_abort,
         "has_finish": has_finish,
+        "has_training_events": has_training_events,
+        "watcher": {
+            "present": watch_started_at is not None,
+            "running": watch_running,
+            "started_at": watch_started_at,
+            "stopped_at": watch_stopped_at,
+            "last_heartbeat_at": watch_last_heartbeat_at,
+            "has_error": watch_has_error,
+        },
     }
 
 

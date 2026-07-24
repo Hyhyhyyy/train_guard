@@ -42,10 +42,12 @@ _METRIC_PATTERNS: Dict[str, re.Pattern[str]] = {
     ),
 }
 
-LORA_WEIGHT_NAMES = (
+ADAPTER_WEIGHT_NAMES = (
     "adapter_model.safetensors",
     "adapter_model.bin",
     "adapter_model.pt",
+)
+FULL_MODEL_WEIGHT_NAMES = (
     "pytorch_model.bin",
     "model.safetensors",
 )
@@ -105,7 +107,14 @@ def list_checkpoint_dirs(output_dir: Path) -> List[Path]:
         return []
     found: List[Path] = []
     try:
-        for p in sorted(output_dir.iterdir()):
+
+        def checkpoint_key(path: Path) -> tuple[int, int | str, str]:
+            suffix = path.name.removeprefix("checkpoint-")
+            if suffix.isdigit():
+                return (0, int(suffix), path.name)
+            return (1, suffix, path.name)
+
+        for p in sorted(output_dir.iterdir(), key=checkpoint_key):
             if p.is_dir() and p.name.startswith("checkpoint-"):
                 try:
                     if any(p.iterdir()):
@@ -117,14 +126,16 @@ def list_checkpoint_dirs(output_dir: Path) -> List[Path]:
     return found
 
 
-def find_lora_weights(search_roots: List[Path]) -> List[Dict[str, Any]]:
-    """Find adapter weight files."""
+def find_weight_files(
+    search_roots: List[Path], names: tuple[str, ...] = ADAPTER_WEIGHT_NAMES
+) -> List[Dict[str, Any]]:
+    """Find named non-recursive weight files."""
     results: List[Dict[str, Any]] = []
     seen = set()
     for root in search_roots:
         if not root.is_dir():
             continue
-        for name in LORA_WEIGHT_NAMES:
+        for name in names:
             path = root / name
             key = str(path)
             if key in seen or not path.is_file():
@@ -133,9 +144,19 @@ def find_lora_weights(search_roots: List[Path]) -> List[Dict[str, Any]]:
             try:
                 size = path.stat().st_size
             except OSError as exc:
-                results.append({"path": path.name, "parent": root.name, "size_bytes": None, "ok": False, "error": str(exc)})
+                results.append(
+                    {
+                        "path": path.name,
+                        "parent": root.name,
+                        "size_bytes": None,
+                        "ok": False,
+                        "error": str(exc),
+                    }
+                )
                 continue
-            results.append({"path": path.name, "parent": root.name or ".", "size_bytes": size, "ok": size > 0})
+            results.append(
+                {"path": path.name, "parent": root.name or ".", "size_bytes": size, "ok": size > 0}
+            )
     return results
 
 
@@ -213,7 +234,7 @@ class HuggingFaceFrameworkAdapter:
                 configs.append(cfg)
         return AdapterArtifacts(
             adapter_configs=configs,
-            weight_files=find_lora_weights(roots),
+            weight_files=find_weight_files(roots),
             checkpoints=checkpoints,
         )
 
@@ -282,7 +303,7 @@ class LLaMAFactoryFrameworkAdapter(HuggingFaceFrameworkAdapter):
                 configs.append(cfg)
         return AdapterArtifacts(
             adapter_configs=configs,
-            weight_files=find_lora_weights(roots),
+            weight_files=find_weight_files(roots),
             checkpoints=checkpoints,
         )
 

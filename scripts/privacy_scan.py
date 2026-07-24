@@ -7,11 +7,11 @@ Findings deliberately contain metadata only. Matched text is never printed.
 from __future__ import annotations
 
 import argparse
-import fnmatch
 import io
 import json
 import os
 import re
+import subprocess
 import sys
 import tokenize
 from dataclasses import dataclass
@@ -22,29 +22,8 @@ from typing import Iterable
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_RELEASE_ROOT = PROJECT_ROOT / "release"
 MAX_FILE_SIZE = 8 * 1024 * 1024
-SOURCE_ENTRIES = (
-    "README.md",
-    "LICENSE",
-    "pyproject.toml",
-    "src",
-    "tests",
-    "scripts",
-    "configs",
-    "docs",
-    "examples",
-)
 FORBIDDEN_SOURCE_NAMES = {"legacy", "private", "reports"}
-SKIP_DIRS = {
-    ".git",
-    ".mypy_cache",
-    ".nox",
-    ".pytest_cache",
-    ".ruff_cache",
-    ".tox",
-    ".venv",
-    "__pycache__",
-    "venv",
-}
+POLICY_RULES = {"R005", "R006", "R007", "R010", "R011"}
 
 
 @dataclass(frozen=True)
@@ -60,6 +39,13 @@ class Finding:
     line: int
     rule: str
     category: str
+
+
+@dataclass
+class ScanStats:
+    candidates: int = 0
+    text_files: int = 0
+    allowed_binary_files: int = 0
 
 
 RULES = (
@@ -93,7 +79,9 @@ RULES = (
     Rule(
         "R004",
         "personal-data",
-        re.compile(r"(?i)\b(?:full[_ -]?name|date[_ -]?of[_ -]?birth|social[_ -]?security)\b|姓名|出生日期|身份证"),
+        re.compile(
+            r"(?i)\b(?:full[_ -]?name|date[_ -]?of[_ -]?birth|social[_ -]?security)\b|姓名|出生日期|身份证"
+        ),
     ),
     Rule(
         "R008",
@@ -105,7 +93,8 @@ RULES = (
         "server-address",
         re.compile(
             r"(?i)\b(?:ssh|sftp)://[^\s'\"]+"
-            r"|(?<![\d.])(?:\d{1,3}\.){3}\d{1,3}(?::\d{1,5})?(?![\d.])"
+            r"|(?<![\d.])(?!127\.0\.0\.1(?::\d{1,5})?(?![\d.]))"
+            r"(?:\d{1,3}\.){3}\d{1,3}(?::\d{1,5})?(?![\d.])"
             r"|\b(?:server|endpoint|base_url)\s*[:=]\s*['\"]"
             r"(?!localhost\b|127\.0\.0\.1\b|example\b|<redacted>\b)[^'\"]{3,}['\"]"
         ),
@@ -135,7 +124,7 @@ def _matches_rule(rule: Rule, path: Path, line: str) -> bool:
     for match in rule.pattern.finditer(line):
         stripped = line.lstrip()
         if path.resolve() == Path(__file__).resolve() and (
-            stripped.startswith('r"') or "re.compile(r\"" in stripped
+            stripped.startswith('r"') or 're.compile(r"' in stripped
         ):
             continue
         if rule.number == "R004" and _is_python_joined_name_identifier(
@@ -167,97 +156,83 @@ def load_allowlist(path: Path | None) -> set[tuple[str, str]]:
         rel = item.get("path")
         rule = item.get("rule")
         reason = item.get("reason")
-        if not all(isinstance(value, str) and value.strip() for value in (rel, rule, reason)):
+        if (
+            not isinstance(rel, str)
+            or not rel.strip()
+            or not isinstance(rule, str)
+            or not rule.strip()
+            or not isinstance(reason, str)
+            or not reason.strip()
+        ):
             raise AllowlistError("each allowlist entry requires path, rule, and reason")
-        normalized = rel.replace("\\", "/").lstrip("./")
+        normalized = rel.replace("\\", "/")
+        while normalized.startswith("./"):
+            normalized = normalized[2:]
         if Path(normalized).is_absolute() or ".." in Path(normalized).parts:
             raise AllowlistError("allowlist paths must be safe relative paths")
-        if rule not in {candidate.number for candidate in RULES}:
+        if rule not in ({candidate.number for candidate in RULES} | POLICY_RULES):
             raise AllowlistError("allowlist contains an unknown rule")
         result.add((normalized, rule))
     return result
 
 
 def _is_binary(path: Path) -> bool:
-    with path.open("rb") as handle:
-        chunk = handle.read(8192)
-    return b"\x00" in chunk
-
-
-class GitIgnore:
-    """Small, deterministic matcher for this repository's simple ignore rules."""
-
-    def __init__(self, patterns: list[tuple[bool, str, bool]]) -> None:
-        self.patterns = patterns
-
-    @classmethod
-    def load(cls, path: Path) -> GitIgnore:
-        patterns: list[tuple[bool, str, bool]] = []
-        try:
-            lines = path.read_text(encoding="utf-8").splitlines()
-        except OSError:
-            return cls(patterns)
-        for raw in lines:
-            value = raw.strip()
-            if not value or value.startswith("#"):
-                continue
-            negated = value.startswith("!")
-            if negated:
-                value = value[1:]
-            directory_only = value.endswith("/")
-            value = value.strip("/").replace("\\", "/")
-            if value:
-                patterns.append((negated, value, directory_only))
-        return cls(patterns)
-
-    def matches(self, rel: str, *, is_dir: bool) -> bool:
-        rel = rel.replace("\\", "/").strip("/")
-        parts = rel.split("/") if rel else []
-        ignored = False
-        for negated, pattern, directory_only in self.patterns:
-            if directory_only and not is_dir:
-                continue
-            if "/" in pattern:
-                matched = fnmatch.fnmatchcase(rel, pattern)
-            else:
-                matched = any(fnmatch.fnmatchcase(part, pattern) for part in parts)
-            if matched:
-                ignored = not negated
-        return ignored
+    """Classify binary data deterministically without relying on extensions."""
+    content = path.read_bytes()
+    if b"\x00" in content:
+        return True
+    try:
+        content.decode("utf-8", errors="strict")
+    except UnicodeDecodeError:
+        return True
+    return False
 
 
 def _walk_files(
     root: Path,
-    *,
-    relative_root: Path | None = None,
-    gitignore: GitIgnore | None = None,
-    forbidden: list[Finding] | None = None,
 ) -> Iterable[Path]:
-    """Walk without following links, honoring local-artifact exclusions."""
-    relative_root = relative_root or root
+    """Walk a release candidate without following directory links."""
     for current, dirs, files in os.walk(root, topdown=True, followlinks=False):
         current_path = Path(current)
         kept: list[str] = []
         for name in sorted(dirs):
             candidate = current_path / name
-            rel = candidate.relative_to(relative_root).as_posix()
-            if name.casefold() in FORBIDDEN_SOURCE_NAMES and forbidden is not None:
-                forbidden.append(Finding(rel, 0, "R010", "forbidden-source-tree"))
-                continue
-            if name in SKIP_DIRS:
-                continue
-            if gitignore is not None and gitignore.matches(rel, is_dir=True):
-                continue
             if candidate.is_symlink():
                 yield candidate
                 continue
             kept.append(name)
         dirs[:] = kept
         for name in sorted(files):
-            candidate = current_path / name
-            rel = candidate.relative_to(relative_root).as_posix()
-            if gitignore is None or not gitignore.matches(rel, is_dir=False):
-                yield candidate
+            yield current_path / name
+
+
+def _git_tracked_files(root: Path) -> list[Path]:
+    """Return the repository's exact tracked-file boundary."""
+    try:
+        result = subprocess.run(
+            ["git", "-C", str(root), "ls-files", "-z", "--cached"],
+            check=True,
+            capture_output=True,
+        )
+    except (OSError, subprocess.CalledProcessError) as exc:
+        raise RuntimeError("git tracked-file enumeration failed") from exc
+    paths: list[Path] = []
+    for raw in result.stdout.split(b"\x00"):
+        if not raw:
+            continue
+        try:
+            rel = raw.decode("utf-8", errors="strict")
+        except UnicodeDecodeError as exc:
+            raise RuntimeError("git returned a non-UTF-8 path") from exc
+        candidate = root / rel
+        try:
+            candidate.relative_to(root)
+        except ValueError as exc:
+            raise RuntimeError("git returned an unsafe path") from exc
+        if not candidate.exists() and not candidate.is_symlink():
+            continue
+        paths.append(candidate)
+    return paths
 
 
 def _scan_files(
@@ -266,9 +241,11 @@ def _scan_files(
     *,
     allowlist: set[tuple[str, str]],
     max_file_size: int,
+    stats: ScanStats,
 ) -> list[Finding]:
     findings: list[Finding] = []
     for path in paths:
+        stats.candidates += 1
         rel = path.relative_to(root).as_posix()
         if path.is_symlink():
             findings.append(Finding(rel, 0, "R005", "symbolic-link"))
@@ -278,7 +255,12 @@ def _scan_files(
                 findings.append(Finding(rel, 0, "R006", "unscanned-large-file"))
                 continue
             if _is_binary(path):
+                if (rel, "R011") in allowlist:
+                    stats.allowed_binary_files += 1
+                else:
+                    findings.append(Finding(rel, 0, "R011", "binary-file"))
                 continue
+            stats.text_files += 1
             with path.open("r", encoding="utf-8", errors="strict") as handle:
                 for line_number, line in enumerate(handle, 1):
                     for rule in RULES:
@@ -296,13 +278,16 @@ def scan_tree(
     *,
     allowlist: set[tuple[str, str]] | None = None,
     max_file_size: int = MAX_FILE_SIZE,
+    stats: ScanStats | None = None,
 ) -> list[Finding]:
     """Return sanitized findings for every readable text file in ``root``."""
+    scan_stats = stats or ScanStats()
     return _scan_files(
         root,
         _walk_files(root),
         allowlist=allowlist or set(),
         max_file_size=max_file_size,
+        stats=scan_stats,
     )
 
 
@@ -311,32 +296,16 @@ def scan_source_tree(
     *,
     allowlist: set[tuple[str, str]] | None = None,
     max_file_size: int = MAX_FILE_SIZE,
+    stats: ScanStats | None = None,
 ) -> list[Finding]:
-    """Scan the complete public source set rooted at ``root``."""
+    """Scan exactly the files tracked by Git at ``root``."""
     findings: list[Finding] = []
-    ignored = GitIgnore.load(root / ".gitignore")
-    paths: list[Path] = []
-
-    for child in sorted(root.iterdir(), key=lambda item: item.name.casefold()):
-        if child.name.casefold() in FORBIDDEN_SOURCE_NAMES:
-            findings.append(Finding(child.name, 0, "R010", "forbidden-source-tree"))
-
-    for entry_name in SOURCE_ENTRIES:
-        entry = root / entry_name
-        if not entry.exists() and not entry.is_symlink():
-            continue
-        if entry.is_file() or entry.is_symlink():
-            if not ignored.matches(entry_name, is_dir=False):
-                paths.append(entry)
-            continue
-        paths.extend(
-            _walk_files(
-                entry,
-                relative_root=root,
-                gitignore=ignored,
-                forbidden=findings,
-            )
-        )
+    paths = _git_tracked_files(root)
+    scan_stats = stats or ScanStats()
+    for path in paths:
+        rel = path.relative_to(root).as_posix()
+        if any(part.casefold() in FORBIDDEN_SOURCE_NAMES for part in Path(rel).parts):
+            findings.append(Finding(rel, 0, "R010", "forbidden-source-tree"))
 
     findings.extend(
         _scan_files(
@@ -344,6 +313,7 @@ def scan_source_tree(
             paths,
             allowlist=allowlist or set(),
             max_file_size=max_file_size,
+            stats=scan_stats,
         )
     )
     return findings
@@ -377,7 +347,22 @@ def main(argv: list[str] | None = None) -> int:
         print("privacy scan allowlist error", file=sys.stderr)
         return 2
     scanner = scan_source_tree if args.mode == "source" else scan_tree
-    findings = scanner(root, allowlist=allowed, max_file_size=max(1, args.max_file_size))
+    stats = ScanStats()
+    try:
+        findings = scanner(
+            root,
+            allowlist=allowed,
+            max_file_size=max(1, args.max_file_size),
+            stats=stats,
+        )
+    except RuntimeError:
+        print("privacy scan git boundary error", file=sys.stderr)
+        return 2
+    print(
+        "privacy scan stats: "
+        f"candidates={stats.candidates} text={stats.text_files} "
+        f"allowed_binary={stats.allowed_binary_files} findings={len(findings)}"
+    )
     if findings:
         for finding in findings:
             print(f"{finding.path}:{finding.line}:{finding.rule}:{finding.category}")

@@ -18,27 +18,51 @@ class GenericDatasetAdapter:
     def __init__(self, field_map: Optional[FieldMap] = None) -> None:
         self.fields = field_map or FieldMap()
 
-    def _load_objects(self, path: Path) -> Iterator[Dict[str, Any]]:
+    def iter_objects(
+        self, path: Path, *, sample_limit: Optional[int] = None
+    ) -> Iterator[Dict[str, Any]]:
+        """Yield raw objects, streaming JSONL one physical line at a time."""
+        count = 0
+        if sample_limit is not None and int(sample_limit) <= 0:
+            return
+        if path.suffix.lower() == ".jsonl":
+            with path.open("r", encoding="utf-8") as fh:
+                for line in fh:
+                    text = line.strip()
+                    if not text:
+                        continue
+                    obj = json.loads(text)
+                    if isinstance(obj, dict):
+                        if sample_limit is not None and count >= int(sample_limit):
+                            break
+                        count += 1
+                        yield obj
+            return
+
         text = path.read_text(encoding="utf-8")
         stripped = text.lstrip()
         if not stripped:
             return
             yield  # pragma: no cover
-        if path.suffix.lower() == ".jsonl" or (
-            not stripped.startswith("[") and not stripped.startswith("{")
-        ):
+        if not stripped.startswith("[") and not stripped.startswith("{"):
             for line in text.splitlines():
                 line = line.strip()
                 if not line:
                     continue
                 obj = json.loads(line)
                 if isinstance(obj, dict):
+                    if sample_limit is not None and count >= int(sample_limit):
+                        break
+                    count += 1
                     yield obj
             return
         data = json.loads(text)
         if isinstance(data, list):
             for obj in data:
                 if isinstance(obj, dict):
+                    if sample_limit is not None and count >= int(sample_limit):
+                        break
+                    count += 1
                     yield obj
             return
         if isinstance(data, dict):
@@ -46,18 +70,19 @@ class GenericDatasetAdapter:
                 if isinstance(data.get(key), list):
                     for obj in data[key]:
                         if isinstance(obj, dict):
+                            if sample_limit is not None and count >= int(sample_limit):
+                                break
+                            count += 1
                             yield obj
                     return
-            yield data
+            if sample_limit is None or int(sample_limit) > 0:
+                yield data
 
     def iter_records(
         self, path: Path, *, sample_limit: Optional[int] = None
     ) -> Iterator[NormalizedRecord]:
         """Stream records with optional sample limit."""
-        count = 0
-        for idx, raw in enumerate(self._load_objects(path)):
-            if sample_limit is not None and count >= int(sample_limit):
-                break
+        for idx, raw in enumerate(self.iter_objects(path, sample_limit=sample_limit)):
             rec = NormalizedRecord(
                 index=idx,
                 raw_keys=sorted(raw.keys()),
@@ -66,7 +91,6 @@ class GenericDatasetAdapter:
                 media=self.extract_media_refs(raw),
                 content=self.extract_messages_or_io(raw),
             )
-            count += 1
             yield rec
 
     def extract_media_refs(self, record: Mapping[str, Any]) -> List[MediaRef]:

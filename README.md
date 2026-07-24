@@ -1,72 +1,122 @@
-# Train Guard
+# Train Guard 0.6.0rc1
 
-Read-only, low-dependency quality checks for LLM/VLM fine-tuning workflows.
+[![CI](https://github.com/Hyhyhyyy/train_guard/actions/workflows/ci.yml/badge.svg)](https://github.com/Hyhyhyyy/train_guard/actions/workflows/ci.yml)
+[![Python 3.10–3.14](https://img.shields.io/badge/python-3.10--3.14-blue)](https://www.python.org/)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
 
-Train Guard checks environments, dataset structure, media references, and training-run artifacts. It does not validate task correctness, stop training processes, install packages, or upload telemetry.
+[简体中文](README_zh-CN.md)
 
-**Repository:** https://github.com/Hyhyhyyy/train_guard
+Train Guard is a local-first toolkit for LLM/VLM training checks, reliability events,
+alerts, and explicitly controlled recovery. The core has no required dependencies.
+Observation is the default: it does not install packages, upload telemetry, stop training,
+or modify training data.
 
-## Recommended workflow (one config)
+## Install
+
+Choose one method:
 
 ```bash
-# 1. Install in editable mode (optional extras: yaml, image, psutil, all)
-pip install -e .
+# Isolated CLI (recommended)
+pipx install train-guard==0.6.0rc1
+uv tool install train-guard==0.6.0rc1
 
-# 2. Generate a starter config (generic | transformers | llamafactory)
+# Current Python environment
+python -m pip install train-guard==0.6.0rc1
+
+# Source checkout
+git clone https://github.com/Hyhyhyyy/train_guard.git
+cd train_guard
+python -m pip install -e .
+```
+
+Optional extras are `yaml`, `image`, `psutil`, `tui`, and `all`:
+
+```bash
+python -m pip install "train-guard[all]==0.6.0rc1"
+python -m pip install "train-guard[tui]==0.6.0rc1"
+```
+
+Upgrade or remove with the tool used to install:
+
+```bash
+pipx upgrade train-guard              # or: uv tool upgrade train-guard
+python -m pip install --upgrade train-guard
+pipx uninstall train-guard            # or: uv tool uninstall train-guard
+python -m pip uninstall train-guard
+```
+
+## Three-minute workflow
+
+```bash
+# 1. Create a generic, Transformers, or LLaMAFactory config.
 train-guard init --template transformers --output train-guard.json
 
-# 3. Edit only the placeholder paths in train-guard.json, then:
+# 2. Replace placeholder paths, then validate environment and data.
 train-guard doctor --config train-guard.json
 train-guard data check --config train-guard.json
 
-# 4. During / after training
+# 3. Observe training and verify outputs.
 train-guard run watch --config train-guard.json
 train-guard run check --config train-guard.json
 train-guard manifest --config train-guard.json
 ```
 
-`run watch` writes `watch.jsonl` and `train_guard_lifecycle.jsonl` (`start` → `heartbeat`/`checkpoint` → `finish`/`abort`). `run check`, `manifest`, and `run compare` read that lifecycle summary.
-No install? Use the development launcher or the single-file release:
+For a source checkout use `python train_guard.py ...`; for the release asset use
+`python train_guard.py ...` after downloading the attached single file.
+
+## Interfaces and recovery
+
+- **CLI:** the supported interface; see [docs/CLI.md](docs/CLI.md).
+- **Web:** `train-guard show --state-db PATH` serves metrics, GPU state, alerts,
+  checkpoints, recovery history, and managed-process status on loopback only.
+- **TUI:** `train-guard tui --state-db PATH` provides the same persistent status over SSH.
+- **Status:** `train-guard run status --state-db PATH` emits one scriptable snapshot.
+- **Controlled recovery:** `run supervise` can restart only an explicit argv, only when
+  `--restart` is supplied, only after checkpoint validation, and within a finite budget.
+  It never executes a shell string. See [docs/RELIABILITY.md](docs/RELIABILITY.md).
 
 ```bash
-python train_guard.py init --output train-guard.json
-python release/train_guard.py doctor --config train-guard.json
+train-guard run supervise --restart --max-restarts 1 \
+  --checkpoint-dir ./checkpoint-100 \
+  --required-checkpoint-file trainer_state.json \
+  -- python train.py --resume-from-checkpoint ./checkpoint-100
 ```
 
-Configuration precedence is `CLI option > configuration file > built-in default`. Every configuration has `schema_version: 1`. Relative paths resolve from the config file directory.
+The training argv itself must include its framework-specific resume option.
 
-## Commands
-
-| Command | Purpose |
-|---|---|
-| `init` | Generate generic, Transformers, or LLaMAFactory configuration |
-| `doctor` | Environment, GPU, and model-shard checks |
-| `data check` | Annotation/media integrity and `group_id` cross-split checks |
-| `data inventory` | Streaming field and media histograms |
-| `data compare` | Compare two annotation files |
-| `run watch` | Sidecar GPU, log, and checkpoint watch |
-| `run check` | Adapter and trainer completion checks |
-| `run compare` | Compare run directories using metadata |
-| `eval` | Prediction/reference metrics with generic `keywords` |
-| `manifest` | Run manifest and experiment fingerprint |
-| `bundle-info` | Version, optional dependencies, and SHA256 |
-
-Stable dataset fields: `group_id`, `keywords`, `messages`, `media`.
-
-Results: `PASS`→0, `WARN`→1, `FAIL`→2. Usage=3, configuration=4, runtime=5, refused overwrite=6.
-
-## Release boundary
-
-The controlled candidate tree is `release/`. Generate and validate it with:
+Control is disabled by default. Start a supervised run with `--enable-control`, then start
+the Web dashboard with the same state database and `--enable-control`. The dashboard prints
+an in-memory token once and accepts only allowlisted actions for that supervised process:
 
 ```bash
-python scripts/bundle_singlefile.py
-python scripts/check_release_manifest.py
-python scripts/privacy_scan.py --allowlist configs/privacy_scan_allowlist.json
+train-guard run supervise --enable-control --state-db ./guard.sqlite \
+  -- python train.py
+train-guard show --enable-control --state-db ./guard.sqlite
 ```
 
-`dist/` and `build/` are ignored local packaging directories and are never release inputs.
+The dashboard rejects non-loopback clients, non-local origins, expired commands, duplicate
+command IDs, unmanaged processes, and unsupported capabilities. Do not proxy it publicly.
 
-Reports redact absolute paths, usernames, hostnames, and credential-like values. Public HTML and JSON must not embed raw sample text or media bytes. Optional packages are never installed automatically.
+## Safety boundary and exit codes
 
-See [docs/MIGRATION.md](docs/MIGRATION.md). Licensed under Apache License 2.0; see [LICENSE](LICENSE).
+Reports redact absolute paths, usernames, hostnames, and credential-like values. Public
+HTML/JSON must not include raw samples or media bytes. Optional packages are never installed
+automatically. Webhooks and exported telemetry are opt-in; users control their destinations.
+Train Guard is a diagnostic aid, not a security sandbox, compliance system, or guarantee
+that a training run is correct.
+
+Stable process results are: `0` PASS, `1` WARN, `2` FAIL, `3` usage error,
+`4` configuration error, `5` runtime error, and `6` refused overwrite.
+
+## Topics
+
+- [CLI reference](docs/CLI.md)
+- [Configuration and precedence](docs/CONFIGURATION.md)
+- [Reliability, Web, and recovery](docs/RELIABILITY.md)
+- [Release process and artifacts](docs/RELEASE.md)
+- [Migration and one-candidate alias window](docs/MIGRATION.md)
+- [Architecture](ARCHITECTURE.md)
+- [Contributing](CONTRIBUTING.md), [security](SECURITY.md), and [support](SUPPORT.md)
+- [Changelog](CHANGELOG.md)
+
+Licensed under the Apache License 2.0; see [LICENSE](LICENSE).

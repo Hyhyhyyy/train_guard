@@ -1,0 +1,105 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/Hyhyhyyy/train_guard/benchmarks/schema.json",
+  "title": "Train Guard benchmark JSONL record",
+  "oneOf": [
+    {"$ref": "#/$defs/telemetry"},
+    {"$ref": "#/$defs/expectedAlert"},
+    {"$ref": "#/$defs/alert"},
+    {"$ref": "#/$defs/recovery"},
+    {"$ref": "#/$defs/result"}
+  ],
+  "$defs": {
+    "versioned": {
+      "type": "object",
+      "required": ["schema_version", "record_type"],
+      "properties": {
+        "schema_version": {"const": "1.0"},
+        "benchmark_version": {"type": "string"},
+        "record_type": {"type": "string"}
+      }
+    },
+    "telemetry": {
+      "allOf": [
+        {"$ref": "#/$defs/versioned"},
+        {
+          "type": "object",
+          "required": ["benchmark_version", "scenario_id", "run_id", "timestamp_s", "step", "metrics"],
+          "properties": {
+            "record_type": {"const": "telemetry"},
+            "scenario_id": {"type": "string"},
+            "run_id": {"type": "string"},
+            "timestamp_s": {"type": "number", "minimum": 0},
+            "step": {"type": "integer", "minimum": 0},
+            "metrics": {
+              "type": "object",
+              "additionalProperties": {
+                "oneOf": [
+                  {"type": ["number", "integer", "boolean", "null"]},
+                  {"enum": ["NaN", "Infinity", "-Infinity"]}
+                ]
+              }
+            }
+          }
+        }
+      ]
+    },
+    "expectedAlert": {
+      "allOf": [
+        {"$ref": "#/$defs/versioned"},
+        {
+          "type": "object",
+          "required": ["benchmark_version", "scenario_id", "run_id", "alert_kind", "fault_onset_s", "evaluation_end_s"],
+          "properties": {
+            "record_type": {"const": "expected_alert"},
+            "scenario_id": {"type": "string"},
+            "run_id": {"type": "string"},
+            "alert_kind": {"type": "string"},
+            "fault_onset_s": {"type": "number"},
+            "evaluation_end_s": {"type": "number"}
+          }
+        }
+      ]
+    },
+    "alert": {
+      "allOf": [
+        {"$ref": "#/$defs/versioned"},
+        {
+          "type": "object",
+          "required": ["run_id", "alert_kind", "timestamp_s"],
+          "properties": {
+            "record_type": {"const": "alert"},
+            "run_id": {"type": "string"},
+            "alert_kind": {"type": "string"},
+            "timestamp_s": {"type": "number"}
+          }
+        }
+      ]
+    },
+    "recovery": {
+      "allOf": [
+        {"$ref": "#/$defs/versioned"},
+        {
+          "type": "object",
+          "required": ["run_id", "timestamp_s", "status"],
+          "properties": {
+            "record_type": {"const": "recovery"},
+            "run_id": {"type": "string"},
+            "timestamp_s": {"type": "number"},
+            "status": {"enum": ["succeeded", "failed"]}
+          }
+        }
+      ]
+    },
+    "result": {
+      "allOf": [
+        {"$ref": "#/$defs/versioned"},
+        {
+          "type": "object",
+          "required": ["benchmark_version", "counts", "detection", "false_positives_per_1000_training_hours", "recovery"],
+          "properties": {"record_type": {"const": "benchmark_result"}}
+        }
+      ]
+    }
+  ]
+}
