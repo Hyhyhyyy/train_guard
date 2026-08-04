@@ -4,10 +4,11 @@ from __future__ import annotations
 
 import json
 import logging
+import os
 import warnings
 from collections import Counter, defaultdict
 from pathlib import Path
-from typing import Any, Dict, List, Optional, Set
+from typing import Any, Dict, List, Optional, Set, TextIO
 
 from .. import __version__
 from ..adapters.base import FieldMap
@@ -20,6 +21,40 @@ from ..report.html import render_html_report
 from .cache import FileCheckCache
 
 LOGGER = logging.getLogger("train_guard.data")
+
+
+class _IssueLedger:
+    """Stream opt-in issue details to a private, per-run JSONL file."""
+
+    def __init__(self, path: Optional[Path]) -> None:
+        self.path = path
+        self.count = 0
+        self._stream: Optional[TextIO] = None
+
+    def __enter__(self) -> "_IssueLedger":
+        if self.path is not None:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            fd = os.open(self.path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+            try:
+                os.chmod(self.path, 0o600)
+                self._stream = os.fdopen(fd, "w", buffering=1, encoding="utf-8", newline="\n")
+            except Exception:
+                os.close(fd)
+                raise
+        return self
+
+    def __exit__(self, _exc_type: object, _exc: object, _tb: object) -> None:
+        if self._stream is not None:
+            self._stream.close()
+
+    def record(self, kind: str, index: int, *, media: Optional[Path] = None) -> None:
+        if self._stream is None:
+            return
+        payload: Dict[str, Any] = {"type": kind, "record_index": index}
+        if media is not None:
+            payload["media"] = media.as_posix()
+        self._stream.write(json.dumps(payload, ensure_ascii=False, allow_nan=False) + "\n")
+        self.count += 1
 
 
 def _field_map_from_cfg(cfg: Dict[str, Any]) -> FieldMap:
@@ -35,6 +70,14 @@ def _field_map_from_cfg(cfg: Dict[str, Any]) -> FieldMap:
 
 def run_data_check(cfg: Dict[str, Any]) -> Dict[str, Any]:
     """Read-only dataset/media/message integrity check."""
+    issues_jsonl = Path(cfg["issues_jsonl"]) if cfg.get("issues_jsonl") else None
+    with _IssueLedger(issues_jsonl) as ledger:
+        return _run_data_check(cfg, ledger, issues_jsonl)
+
+
+def _run_data_check(
+    cfg: Dict[str, Any], ledger: _IssueLedger, issues_jsonl: Optional[Path]
+) -> Dict[str, Any]:
     annotation = cfg.get("annotation")
     if not annotation:
         raise ValueError("annotation path is required")
@@ -110,6 +153,7 @@ def run_data_check(cfg: Dict[str, Any]) -> Dict[str, Any]:
         raw_empty = not rec.raw_keys
         if raw_empty:
             stats["empty_records"] += 1
+            ledger.record("empty_record", rec.index)
             if len(issues["empty_records"]) < max_examples:
                 issues["empty_records"].append(f"index={rec.index}")
             continue
@@ -125,6 +169,7 @@ def run_data_check(cfg: Dict[str, Any]) -> Dict[str, Any]:
                     break
         if answer is not None and str(answer).strip() == "":
             stats["empty_answers"] += 1
+            ledger.record("empty_answer", rec.index)
             if len(issues["empty_answers"]) < max_examples:
                 issues["empty_answers"].append(f"index={rec.index}")
 
@@ -134,11 +179,13 @@ def run_data_check(cfg: Dict[str, Any]) -> Dict[str, Any]:
             p = (candidate if candidate.is_absolute() else data_root / candidate).resolve()
             if not allow_external_media and not p.is_relative_to(data_root):
                 stats["media_path_escape"] += 1
+                ledger.record("media_path_escape", rec.index, media=candidate)
                 if len(issues["media_path_escape"]) < max_examples:
                     issues["media_path_escape"].append(f"index={rec.index} media={candidate.name}")
                 continue
             if max_media_files is not None and stats["media_checked"] >= max_media_files:
                 stats["scan_budget_exceeded"] += 1
+                ledger.record("media_file_budget_exceeded", rec.index, media=candidate)
                 if len(issues["scan_budget_exceeded"]) < max_examples:
                     issues["scan_budget_exceeded"].append("media file budget reached")
                 continue
@@ -147,21 +194,25 @@ def run_data_check(cfg: Dict[str, Any]) -> Dict[str, Any]:
             stats["media_checked"] += 1
             if not p.exists():
                 stats["missing_media"] += 1
+                ledger.record("missing_media", rec.index, media=candidate)
                 if len(issues["missing_media"]) < max_examples:
                     issues["missing_media"].append(f"index={rec.index} media={Path(ref.path).name}")
                 continue
             try:
                 size = p.stat().st_size
             except OSError as exc:
+                ledger.record("media_stat_error", rec.index, media=candidate)
                 if len(issues["stat_errors"]) < max_examples:
                     issues["stat_errors"].append(f"index={rec.index} err={type(exc).__name__}")
                 continue
             if size == 0:
                 stats["zero_byte_files"] += 1
+                ledger.record("zero_byte_media", rec.index, media=candidate)
                 if len(issues["zero_byte_files"]) < max_examples:
                     issues["zero_byte_files"].append(f"index={rec.index}")
             if max_scan_bytes is not None and stats["scan_bytes"] + size > max_scan_bytes:
                 stats["scan_budget_exceeded"] += 1
+                ledger.record("media_byte_budget_exceeded", rec.index, media=candidate)
                 if len(issues["scan_budget_exceeded"]) < max_examples:
                     issues["scan_budget_exceeded"].append("media byte budget reached")
                 continue
@@ -190,6 +241,7 @@ def run_data_check(cfg: Dict[str, Any]) -> Dict[str, Any]:
                         cache.set(p, "verify", {"ok": ok, "error": err})
                 if not ok:
                     stats["media_verify_failed"] += 1
+                    ledger.record("media_verify_failed", rec.index, media=candidate)
                     if len(issues["media_verify_failed"]) < max_examples:
                         issues["media_verify_failed"].append(f"index={rec.index}")
 
@@ -206,6 +258,7 @@ def run_data_check(cfg: Dict[str, Any]) -> Dict[str, Any]:
         if rec.group_id is not None and rec.split is not None:
             group_splits[rec.group_id].add(str(rec.split))
 
+    stats["issue_ledger_records"] = ledger.count
     stats["scanned_samples"] = stats["total_seen"]
     if sample_limit is None:
         stats["total_samples"] = stats["total_seen"]
@@ -251,6 +304,7 @@ def run_data_check(cfg: Dict[str, Any]) -> Dict[str, Any]:
         "extension_counts": dict(ext_counter),
         "media_per_sample_distribution": {str(k): v for k, v in sorted(media_per_sample.items())},
         "issues": dict(issues),
+        "issues_jsonl": issues_jsonl.name if issues_jsonl is not None else None,
         "privacy_note": "Public fields are redacted; group ids hashed; no raw media content.",
         "disclaimer": "Integrity check only; does not validate task quality or domain correctness.",
     }

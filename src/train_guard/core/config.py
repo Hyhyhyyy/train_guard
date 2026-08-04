@@ -56,6 +56,7 @@ def _template(framework: str) -> Dict[str, Any]:
                 "media": "media",
                 "split": "split",
                 "report_dir": "./reports/data_check",
+                "issues_jsonl": None,
             },
             "inventory": {
                 "annotation": "./data/train.jsonl",
@@ -245,6 +246,7 @@ SECTION_FIELDS: Dict[tuple[str, ...], Dict[str, tuple[type, ...]]] = {
         "split": _t(str, type(None)),
         "report_dir": _t(str),
         "cache_db": _t(str, type(None)),
+        "issues_jsonl": _t(str, type(None)),
     },
     ("data", "inventory"): {
         "annotation": _t(str),
@@ -333,6 +335,7 @@ DEFAULTS: Dict[tuple[str, ...], Dict[str, Any]] = {
         "split": "split",
         "report_dir": "reports/data_check",
         "cache_db": None,
+        "issues_jsonl": None,
     },
     ("data", "inventory"): {
         "sample_limit": None,
@@ -409,6 +412,7 @@ PATH_FIELDS = {
     "data_root",
     "report_dir",
     "cache_db",
+    "issues_jsonl",
     "left",
     "right",
     "log_file",

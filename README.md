@@ -11,6 +11,15 @@ alerts, and explicitly controlled recovery. The core has no required dependencie
 Observation is the default: it does not install packages, upload telemetry, stop training,
 or modify training data.
 
+## Capabilities at a glance
+
+- **Before training:** environment, GPU, dependency, model-path, dataset, media, and split checks.
+- **During training:** lifecycle, log, loss, GPU, disk, checkpoint, and process observation.
+- **Reliability:** structured events, deduplicated alerts, persistent state, and bounded recovery.
+- **After training:** output acceptance checks, run comparison, evaluation, and SHA256 manifests.
+- **Interfaces:** CLI, Python API, Hugging Face callback, loopback Web dashboard, and SSH TUI.
+- **Delivery:** zero-required-dependency core plus a generated, checksummed single-file release.
+
 ## Install
 
 Choose one method:
@@ -60,6 +69,17 @@ train-guard run watch --config train-guard.json
 train-guard run check --config train-guard.json
 train-guard manifest --config train-guard.json
 ```
+
+To preserve every missing-media, invalid-media, and empty-answer finding, opt in to a local
+JSONL ledger:
+
+```bash
+train-guard data check --config train-guard.json \
+  --issues-jsonl ./reports/data-issues.jsonl
+```
+
+The ledger can contain media references, including absolute paths supplied by the dataset.
+Treat it as sensitive and do not publish it with public reports.
 
 For a source checkout use `python train_guard.py ...`; for the release asset use
 `python train_guard.py ...` after downloading the attached single file.

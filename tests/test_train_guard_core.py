@@ -126,6 +126,7 @@ class TestDataCommands(unittest.TestCase):
             ]
             ann = root / "train.json"
             ann.write_text(json.dumps(samples), encoding="utf-8")
+            issue_ledger = root / "issues.jsonl"
             report = run_data_check(
                 {
                     "annotation": str(ann),
@@ -134,6 +135,7 @@ class TestDataCommands(unittest.TestCase):
                     "compute_hash": True,
                     "verify_images": False,
                     "cache_db": str(root / "cache.sqlite"),
+                    "issues_jsonl": str(issue_ledger),
                 }
             )
             self.assertEqual(report["overall_status"], "FAIL")
@@ -142,6 +144,14 @@ class TestDataCommands(unittest.TestCase):
             self.assertGreaterEqual(report["stats"]["group_leak_count"], 1)
             leak = report["issues"].get("group_leak") or []
             self.assertTrue(all("G1" not in x for x in leak))
+            ledger = [
+                json.loads(line) for line in issue_ledger.read_text(encoding="utf-8").splitlines()
+            ]
+            self.assertEqual(report["stats"]["issue_ledger_records"], len(ledger))
+            self.assertTrue(any(item["type"] == "missing_media" for item in ledger))
+            self.assertTrue(any(item["type"] == "empty_answer" for item in ledger))
+            self.assertTrue(any(item["type"] == "zero_byte_media" for item in ledger))
+            self.assertTrue(all("record_index" in item for item in ledger))
 
     def test_inventory_and_compare(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

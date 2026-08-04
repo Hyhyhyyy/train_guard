@@ -15,6 +15,7 @@ data:
     media: media
     split: split
     report_dir: ./reports/data_check
+    issues_jsonl: ./reports/data_check/issues.jsonl
   inventory:
     annotation: ./data/train.jsonl
     sample_limit: 1000

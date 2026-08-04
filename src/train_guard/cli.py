@@ -91,6 +91,7 @@ def _dataset_cfg(args: argparse.Namespace) -> dict[str, Any]:
         "media_field": getattr(args, "media", None),
         "messages_field": getattr(args, "messages", None),
         "cache_db": getattr(args, "cache_db", None),
+        "issues_jsonl": getattr(args, "issues_jsonl", None),
     }
 
 

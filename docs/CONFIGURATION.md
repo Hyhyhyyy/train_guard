@@ -37,4 +37,5 @@ Textual for the optional terminal dashboard; `all` includes it.
 
 Keep credentials out of configuration when possible. Webhook URLs may contain sensitive
 query strings; do not commit them, paste them into issues, or include them in release
-artifacts. Reports should use synthetic paths and data before sharing.
+artifacts. An opt-in `data.check.issues_jsonl` ledger can contain media paths and must remain
+local unless explicitly reviewed. Reports should use synthetic paths and data before sharing.

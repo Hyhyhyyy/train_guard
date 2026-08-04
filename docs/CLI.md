@@ -33,6 +33,10 @@ cycle and emit a warning. They are scheduled for removal in 0.6.0 final; migrate
 `3`, invalid configuration uses `4`, runtime failures use `5`, and overwrite refusal
 uses `6`. Automation should branch on the integer code, not localized output text.
 
+`data check --issues-jsonl PATH` writes every detected missing-media, empty-answer,
+zero-byte, unreadable-media, path-escape, and scan-budget issue as one JSON object per line.
+This opt-in ledger is local and may contain media paths; treat it as sensitive data.
+
 Ctrl-C or a watcher snapshot means observation stopped; neither proves training completed.
 Use `run check` against the output evidence.
 

@@ -8,6 +8,15 @@
 
 Train Guard 是面向 LLM/VLM 训练的本地优先可靠性工具，提供检查、监控、告警、可视化和显式受控恢复。核心安装没有必选依赖。默认只观察：不会自动安装包、上传遥测、停止训练或修改训练数据。
 
+## 功能概览
+
+- **训练前：**检查环境、GPU、依赖、模型路径、数据、媒体文件和数据划分。
+- **训练中：**观察生命周期、日志、Loss、GPU、磁盘、检查点和训练进程。
+- **可靠性：**生成结构化事件、去重告警、持久状态，并执行有界受控恢复。
+- **训练后：**验收输出、对比运行、评估结果，并生成 SHA256 清单。
+- **使用界面：**CLI、Python API、Hugging Face 回调、本地 Web 面板和 SSH TUI。
+- **交付方式：**核心零必选依赖，同时提供经过校验的单文件发行版。
+
 ## 安装
 
 任选一种方式：
@@ -57,6 +66,15 @@ train-guard run watch --config train-guard.json
 train-guard run check --config train-guard.json
 train-guard manifest --config train-guard.json
 ```
+
+需要逐条保存全部缺图、坏图和空答案时，增加 `--issues-jsonl`：
+
+```bash
+train-guard data check --config train-guard.json --issues-jsonl ./reports/data-issues.jsonl
+```
+
+该台账可能包含媒体引用；如果原始数据使用绝对路径，绝对路径也会写入。请作为敏感
+本地文件保管，不要随公开报告发布。
 
 源码目录和下载的单文件发行资产都可使用 `python train_guard.py ...`。
 

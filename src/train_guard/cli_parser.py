@@ -63,6 +63,7 @@ def _data_check_args(parser: argparse.ArgumentParser) -> None:
     _add(parser, "--messages-field", dest="messages")
     _add(parser, "--report-dir")
     _add(parser, "--cache-db")
+    _add(parser, "--issues-jsonl")
 
 
 def _run_watch_args(parser: argparse.ArgumentParser) -> None:

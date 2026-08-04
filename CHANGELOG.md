@@ -26,6 +26,8 @@
   reliability runtime across the public API and Hugging Face callback.
 - Retain deprecated command aliases for this candidate cycle only; removal is scheduled for
   0.6.0 final.
+- Add an opt-in, complete JSONL data-issue ledger with configuration-file support and
+  private-file permissions for missing media, empty answers, corrupt files, and scan limits.
 
 ## 0.5.0
 

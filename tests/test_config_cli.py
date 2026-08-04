@@ -44,6 +44,7 @@ class TestInit(unittest.TestCase):
                 self.assertEqual(check["group_id"], "group_id")
                 self.assertEqual(check["messages"], "messages")
                 self.assertEqual(check["media"], "media")
+                self.assertIsNone(check["issues_jsonl"])
                 self.assertNotIn("images_field", check)
                 self.assertNotIn("answer_field", check)
                 self.assertIn("inventory", data["data"])
@@ -131,13 +132,22 @@ class TestConfigSchema(unittest.TestCase):
                 cfg_dir,
                 {
                     "schema_version": 1,
-                    "data": {"check": {"annotation": "../data/train.jsonl"}},
+                    "data": {
+                        "check": {
+                            "annotation": "../data/train.jsonl",
+                            "issues_jsonl": "../reports/issues.jsonl",
+                        }
+                    },
                 },
             )
             result = resolve_command_config(("data", "check"), path, {})
             self.assertEqual(
                 Path(result["annotation"]),
                 (cfg_dir / "../data/train.jsonl").resolve(),
+            )
+            self.assertEqual(
+                Path(result["issues_jsonl"]),
+                (cfg_dir / "../reports/issues.jsonl").resolve(),
             )
             cli_path = "./cli/train.jsonl"
             overridden = resolve_command_config(("data", "check"), path, {"annotation": cli_path})
