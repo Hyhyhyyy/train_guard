@@ -239,12 +239,14 @@ def _windows_pid_alive(pid: int) -> bool:
     import ctypes
 
     process_query_limited_information = 0x1000
-    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    win_dll = getattr(ctypes, "WinDLL")
+    get_last_error = getattr(ctypes, "get_last_error")
+    kernel32 = win_dll("kernel32", use_last_error=True)
     handle = kernel32.OpenProcess(process_query_limited_information, False, pid)
     if handle:
         kernel32.CloseHandle(handle)
         return True
-    return ctypes.get_last_error() == 5
+    return get_last_error() == 5
 
 
 def pid_alive(pid: int) -> bool:

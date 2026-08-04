@@ -28,6 +28,8 @@
   0.6.0 final.
 - Add an opt-in, complete JSONL data-issue ledger with configuration-file support and
   private-file permissions for missing media, empty answers, corrupt files, and scan limits.
+- Make single-file checksums deterministic across operating systems and isolate wheel smoke
+  tests from the source tree; keep Windows process checks type-safe on non-Windows CI hosts.
 
 ## 0.5.0
 

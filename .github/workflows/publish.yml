@@ -71,9 +71,11 @@ jobs:
           python -m twine check dist/*.whl dist/*.tar.gz
           python tests/test_release_engineering.py
       - name: Smoke-test wheel in isolation
+        env:
+          PYTHONPATH: ""
         run: |
           python -m venv wheel-smoke
-          wheel-smoke/bin/python -m pip install dist/*.whl
+          wheel-smoke/bin/python -m pip install --force-reinstall --no-deps dist/*.whl
           wheel-smoke/bin/train-guard --version
           wheel-smoke/bin/train-guard --help
       - name: Audit isolated wheel environment

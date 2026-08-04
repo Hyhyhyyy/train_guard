@@ -151,7 +151,7 @@ def main() -> int:
     header = header.replace("__PAYLOAD__", payload)
 
     OUT.parent.mkdir(parents=True, exist_ok=True)
-    OUT.write_text(header, encoding="utf-8")
+    OUT.write_text(header, encoding="utf-8", newline="\n")
     print(f"Wrote {OUT}")
     print(f"Modules bundled: {len(sources)}")
     return 0

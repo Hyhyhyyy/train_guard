@@ -88,9 +88,11 @@ jobs:
       - name: Audit installed dependencies
         run: python -m pip_audit
       - name: Install and smoke-test wheel
+        env:
+          PYTHONPATH: ""
         run: |
           python -m venv wheel-smoke
-          wheel-smoke/bin/python -m pip install dist/*.whl
+          wheel-smoke/bin/python -m pip install --force-reinstall --no-deps dist/*.whl
           wheel-smoke/bin/train-guard --version
           wheel-smoke/bin/train-guard --help
       - name: Verify sdist content boundary
