@@ -1,4 +1,41 @@
-# Train Guard 0.6.0rc1
+<p align="center">
+  <img src="banner.svg" alt="Train Guard LLM/VLM Training Toolkit" width="100%">
+</p>
+
+<div align="center">
+
+![CI](https://img.shields.io/badge/CI-success-success-https://github.com/Hyhyhyyy/train_guard/actions/workflows/ci.yml)
+![Python](https://img.shields.io/badge/python-3.10--3.14-blue-blue-https://www.python.org/)
+![License](https://img.shields.io/badge/License-Apache--2.0-blue-blue-LICENSE)
+
+**LLM/VLM 训练守护 · 可靠观测与受控恢复**
+
+[简体中文](README_zh-CN.md) · [CLI Reference](docs/CLI.md) · [Configuration](docs/CONFIGURATION.md) · [Reliability](docs/RELIABILITY.md) · [Architecture](ARCHITECTURE.md)
+
+</div>
+
+
+---
+
+
+## ✨ Capabilities at a Glance
+
+| 特性 | 说明 |
+|------|------|
+| 🔍 **训练前检查** | 环境、GPU、依赖、模型路径、数据集、媒体文件全面检查 |
+| 👁️ **训练中观测** | 生命周期、日志、Loss、GPU、磁盘、检查点、进程监控 |
+| 🛡️ **可靠性保障** | 结构化事件、去重告警、持久状态、有界恢复 |
+| ✅ **训练后校验** | 输出验收、运行对比、评估、SHA256 清单 |
+| 🖥️ **多端接口** | CLI、Python API、HF Callback、Web Dashboard、SSH TUI |
+| 📦 **零依赖核心** | 无必需依赖的单文件发布，checksum 校验 |
+
+## 🔄 工作流概览
+
+<p align="center"><img src="diagrams/train_guard.svg" alt="Train Guard Workflow" width="95%"></p>
+
+
+---
+
 
 [![CI](https://github.com/Hyhyhyyy/train_guard/actions/workflows/ci.yml/badge.svg)](https://github.com/Hyhyhyyy/train_guard/actions/workflows/ci.yml)
 [![Python 3.10–3.14](https://img.shields.io/badge/python-3.10--3.14-blue)](https://www.python.org/)
@@ -159,3 +196,12 @@ Stable process results are: `0` PASS, `1` WARN, `2` FAIL, `3` usage error,
 - [Changelog](CHANGELOG.md)
 
 Licensed under the Apache License 2.0; see [LICENSE](LICENSE).
+
+
+---
+
+<div align="center">
+
+Licensed under the Apache License 2.0 · see [LICENSE](LICENSE)
+
+</div>
