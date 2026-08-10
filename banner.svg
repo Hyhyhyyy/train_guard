@@ -1,104 +1,40 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 380" width="1280" height="380" role="img" aria-label="Train Guard · LLM/VLM 训练守护工具包">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 380" role="img" aria-label="train_guard" font-family="'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif">
   <defs>
-    <linearGradient id="bgGrad" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#07131a"/>
-      <stop offset="0.55" stop-color="#0c2230"/>
-      <stop offset="1" stop-color="#060f17"/>
+    <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0" stop-color="#0c1a2e"/>
+      <stop offset="1" stop-color="#15293f"/>
     </linearGradient>
-    <linearGradient id="beamGrad" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0" stop-color="#a5f3fc" stop-opacity="0"/>
-      <stop offset="0.5" stop-color="#22d3ee" stop-opacity="0.8"/>
-      <stop offset="1" stop-color="#a5f3fc" stop-opacity="0"/>
+    <linearGradient id="title" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#38bdf8"/>
+      <stop offset="1" stop-color="#e2e8f0"/>
     </linearGradient>
-    <radialGradient id="haloGrad" cx="0.5" cy="0.5" r="0.5">
-      <stop offset="0" stop-color="#06b6d4" stop-opacity="0.5"/>
-      <stop offset="1" stop-color="#06b6d4" stop-opacity="0"/>
-    </radialGradient>
-    <linearGradient id="titleGrad" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0" stop-color="#67e8f9"/>
-      <stop offset="1" stop-color="#38bdf8"/>
-    </linearGradient>
-    <linearGradient id="shieldGrad" x1="0" y1="0" x2="0" y2="1">
-      <stop offset="0" stop-color="#22d3ee"/>
-      <stop offset="1" stop-color="#0e7490"/>
+    <linearGradient id="beam" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0"/>
+      <stop offset="0.5" stop-color="#38bdf8" stop-opacity="0.20"/>
+      <stop offset="1" stop-color="#ffffff" stop-opacity="0"/>
     </linearGradient>
   </defs>
-
-  <rect width="1280" height="380" fill="url(#bgGrad)"/>
-
-  <!-- (a) BANNER-WIDE MOTION: cyan guard-light sweep across the full width -->
-  <g>
-    <rect x="-220" y="0" width="220" height="380" fill="url(#beamGrad)" opacity="0">
-      <animate attributeName="x" values="-220;1500;-220" dur="8s" repeatCount="indefinite"/>
-      <animate attributeName="opacity" values="0;0.5;0" dur="8s" repeatCount="indefinite"/>
-    </rect>
+  <rect width="1280" height="380" fill="url(#bg)"/>
+  <circle cx="960" cy="190" r="152" fill="#38bdf8" opacity="0.07"/>
+  <circle cx="960" cy="190" r="152" fill="none" stroke="#38bdf8" stroke-width="2" opacity="0.18"/>
+  <rect x="-120" y="0" width="64" height="380" fill="url(#beam)">
+    <animate attributeName="x" values="-120;1240;-120" dur="9s" repeatCount="indefinite"/>
+  </rect>
+  <g transform="translate(960,190)">
+    <circle r="118" fill="#091626" stroke="#38bdf8" stroke-width="8"/>
+    <path d="M0,-72 C44,-72 72,-50 72,-10 C72,40 30,66 0,80 C-30,66 -72,40 -72,-10 C-72,-50 -44,-72 0,-72 Z" fill="#0c1a2e" stroke="#38bdf8" stroke-width="8"/>
+    <path d="M-44,2 L-18,2 L-6,-26 L10,28 L24,2 L44,2" fill="none" stroke="#e2e8f0" stroke-width="8" stroke-linecap="round" stroke-linejoin="round"/>
   </g>
-  <g fill="#a5f3fc">
-    <circle cx="0" cy="100" r="2.2" opacity="0.6">
-      <animate attributeName="cx" values="-20;1320" dur="9.5s" repeatCount="indefinite"/>
-    </circle>
-    <circle cx="0" cy="300" r="1.8" opacity="0.5">
-      <animate attributeName="cx" values="1320;-20" dur="11.5s" repeatCount="indefinite"/>
-    </circle>
-  </g>
-
-  <!-- (b) TITLE-SURROUND MOTION: pulsing halo + draw-on underline -->
-  <circle cx="290" cy="128" r="132" fill="url(#haloGrad)">
-    <animate attributeName="r" values="116;144;116" dur="4.4s" repeatCount="indefinite"/>
-    <animate attributeName="opacity" values="0.5;0.85;0.5" dur="4.4s" repeatCount="indefinite"/>
+  <circle cx="210" cy="120" r="66" fill="none" stroke="#38bdf8" stroke-width="6" opacity="0.22">
+    <animate attributeName="r" values="56;80;56" dur="4.5s" repeatCount="indefinite"/>
+    <animate attributeName="opacity" values="0.34;0.08;0.34" dur="4.5s" repeatCount="indefinite"/>
   </circle>
-
-  <text x="62" y="134" font-family="'PingFang SC','Microsoft YaHei',sans-serif" font-size="54" font-weight="800" fill="url(#titleGrad)">Train Guard</text>
-  <line x1="64" y1="154" x2="290" y2="154" stroke="#38bdf8" stroke-width="4" stroke-linecap="round" stroke-dasharray="230" stroke-dashoffset="230">
-    <animate attributeName="stroke-dashoffset" values="230;0;0;230" keyTimes="0;0.5;0.85;1" dur="6s" repeatCount="indefinite"/>
-  </line>
-  <text x="64" y="188" font-family="'PingFang SC','Microsoft YaHei',sans-serif" font-size="19" font-weight="500" fill="#a5f3fc">LLM/VLM 训练守护 · 本地优先零依赖</text>
-
-  <g font-family="'PingFang SC','Microsoft YaHei',sans-serif" font-size="15" font-weight="600" fill="#a5f3fc">
-    <rect x="64" y="208" width="88" height="30" rx="15" fill="#0c2c3a"/>
-    <text x="84" y="228">训练检查</text>
-    <rect x="168" y="208" width="88" height="30" rx="15" fill="#0c2c3a"/>
-    <text x="188" y="228">可靠性</text>
-    <rect x="272" y="208" width="96" height="30" rx="15" fill="#0c2c3a"/>
-    <text x="292" y="228">受控恢复</text>
-  </g>
-
-  <!-- HERO MOTIF (right): a guardian shield watching the training heartbeat + checkpoint + alert -->
-  <g transform="translate(985,196)">
-    <!-- GPU chip (training process) -->
-    <g>
-      <animateTransform attributeName="transform" type="translate" values="0 0;0 -6;0 0" dur="4.6s" repeatCount="indefinite"/>
-      <rect x="-150" y="-44" width="74" height="74" rx="10" fill="#0e3a4a" stroke="#22d3ee" stroke-width="2"/>
-      <rect x="-132" y="-26" width="38" height="38" rx="6" fill="#0c2230"/>
-      <g fill="#22d3ee">
-        <rect x="-150" y="-30" width="6" height="10"/><rect x="-150" y="-12" width="6" height="10"/><rect x="-150" y="6" width="6" height="10"/>
-        <rect x="-80" y="-30" width="6" height="10"/><rect x="-80" y="-12" width="6" height="10"/><rect x="-80" y="6" width="6" height="10"/>
-      </g>
-    </g>
-    <!-- guardian shield -->
-    <g transform="translate(20,0)">
-      <g>
-        <animateTransform attributeName="transform" type="scale" values="1 1;1.04 1.04;1 1" dur="3.4s" repeatCount="indefinite"/>
-        <path d="M-46,-66 L46,-66 L46,4 Q46,54 0,78 Q-46,54 -46,4 Z" fill="url(#shieldGrad)" opacity="0.95"/>
-        <path d="M-46,-66 L46,-66 L46,4 Q46,54 0,78 Q-46,54 -46,4 Z" fill="none" stroke="#a5f3fc" stroke-width="3"/>
-        <!-- heartbeat / loss curve -->
-        <polyline points="-30,8 -12,8 -4,-16 4,26 12,8 30,8" fill="none" stroke="#052b33" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
-        <circle r="4.5" fill="#052b33">
-          <animateMotion dur="2.6s" repeatCount="indefinite" path="M-30,8 L-12,8 L-4,-16 L4,26 L12,8 L30,8"/>
-        </circle>
-      </g>
-    </g>
-    <!-- checkpoint flag -->
-    <g>
-      <animateTransform attributeName="transform" type="rotate" values="-4 96 -52;4 96 -52;-4 96 -52" dur="3s" repeatCount="indefinite"/>
-      <line x1="96" y1="-92" x2="96" y2="-30" stroke="#34d399" stroke-width="4" stroke-linecap="round"/>
-      <path d="M96,-92 L132,-82 L96,-72 Z" fill="#34d399"/>
-    </g>
-    <!-- alert bell -->
-    <g>
-      <animate attributeName="opacity" values="0.7;1;0.7" dur="2.4s" repeatCount="indefinite"/>
-      <path d="M-96,40 a14,14 0 0 1 28,0 Z" fill="none" stroke="#fbbf24" stroke-width="3.5" stroke-linecap="round"/>
-      <path d="M-82,40 L-82,46 M-82,52 a3,3 0 1 1 0,0.1" stroke="#fbbf24" stroke-width="3.5" fill="none" stroke-linecap="round"/>
-    </g>
+  <text x="70" y="150" font-size="60" font-weight="800" fill="url(#title)">train_guard</text>
+  <text x="72" y="198" font-size="22" fill="#bcd6ef" opacity="0.9">LLM/VLM 训练可靠性守护</text>
+  <g font-size="16" font-weight="600">
+    <rect x="72" y="220" width="120" height="34" rx="17" fill="#38bdf8" opacity="0.18" stroke="#7dd3fc" stroke-width="2"/>
+    <text x="132" y="242" fill="#d6eefe" text-anchor="middle">检查</text>
+    <rect x="204" y="220" width="120" height="34" rx="17" fill="#e2e8f0" opacity="0.14" stroke="#e2e8f0" stroke-width="2"/>
+    <text x="264" y="242" fill="#f1f5f9" text-anchor="middle">监控</text>
   </g>
 </svg>
