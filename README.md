@@ -4,9 +4,9 @@
 
 <div align="center">
 
-![CI](https://img.shields.io/badge/CI-success-success-https://github.com/Hyhyhyyy/train_guard/actions/workflows/ci.yml)
-![Python](https://img.shields.io/badge/python-3.10--3.14-blue-blue-https://www.python.org/)
-![License](https://img.shields.io/badge/License-Apache--2.0-blue-blue-LICENSE)
+![CI](https://img.shields.io/badge/CI-passing-success?link=https%3A%2F%2Fgithub.com%2FHyhyhyyy%2Ftrain_guard%2Factions%2Fworkflows%2Fci.yml)
+![Python](https://img.shields.io/badge/Python-3.10~3.14-blue?link=https%3A%2F%2Fwww.python.org%2F)
+![License](https://img.shields.io/badge/License-Apache_2.0-blue?link=LICENSE)
 
 **LLM/VLM 训练守护 · 可靠观测与受控恢复**
 
@@ -38,8 +38,8 @@
 
 
 [![CI](https://github.com/Hyhyhyyy/train_guard/actions/workflows/ci.yml/badge.svg)](https://github.com/Hyhyhyyy/train_guard/actions/workflows/ci.yml)
-[![Python 3.10–3.14](https://img.shields.io/badge/python-3.10--3.14-blue)](https://www.python.org/)
-[![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
+[![Python 3.10–3.14](https://img.shields.io/badge/python-3.10~3.14-blue)](https://www.python.org/)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache_2.0-blue)](LICENSE)
 
 [简体中文](README_zh-CN.md)
 
@@ -196,6 +196,7 @@ Stable process results are: `0` PASS, `1` WARN, `2` FAIL, `3` usage error,
 - [Changelog](CHANGELOG.md)
 
 Licensed under the Apache License 2.0; see [LICENSE](LICENSE).
+
 
 
 ---
