@@ -1,104 +1,104 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 380" width="1280" height="380" role="img" aria-label="Train Guard">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1280 380" width="1280" height="380" role="img" aria-label="Train Guard · LLM/VLM 训练守护工具包">
   <defs>
-    <linearGradient id="bg_train_guard" x1="0" y1="0" x2="0.4" y2="1">
-      <stop offset="0.00" stop-color="#1c1917"/><stop offset="0.33" stop-color="#292524"/><stop offset="0.67" stop-color="#7f1d1d"/><stop offset="1.00" stop-color="#451a03"/>
+    <linearGradient id="bgGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#07131a"/>
+      <stop offset="0.55" stop-color="#0c2230"/>
+      <stop offset="1" stop-color="#060f17"/>
     </linearGradient>
-    <linearGradient id="g_train_guard" x1="0" y1="0" x2="1" y2="0">
-      <stop offset="0" stop-color="#fee2e2"/>
-      <stop offset="0.5" stop-color="#fecaca"/>
-      <stop offset="1" stop-color="#fcd34d"/>
-      <animate attributeName="x1" values="0;0.3;0" dur="8s" repeatCount="indefinite"/>
-      <animate attributeName="x2" values="1;0.7;1" dur="8s" repeatCount="indefinite"/>
+    <linearGradient id="beamGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#a5f3fc" stop-opacity="0"/>
+      <stop offset="0.5" stop-color="#22d3ee" stop-opacity="0.8"/>
+      <stop offset="1" stop-color="#a5f3fc" stop-opacity="0"/>
     </linearGradient>
-    <filter id="blur_train_guard" x="-50%" y="-50%" width="200%" height="200%">
-      <feGaussianBlur stdDeviation="34"/>
-    </filter>
-    <clipPath id="clip_train_guard"><rect x="0" y="0" width="1280" height="380" rx="18"/></clipPath>
-
+    <radialGradient id="haloGrad" cx="0.5" cy="0.5" r="0.5">
+      <stop offset="0" stop-color="#06b6d4" stop-opacity="0.5"/>
+      <stop offset="1" stop-color="#06b6d4" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="titleGrad" x1="0" y1="0" x2="1" y2="0">
+      <stop offset="0" stop-color="#67e8f9"/>
+      <stop offset="1" stop-color="#38bdf8"/>
+    </linearGradient>
+    <linearGradient id="shieldGrad" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#22d3ee"/>
+      <stop offset="1" stop-color="#0e7490"/>
+    </linearGradient>
   </defs>
-  <g clip-path="url(#clip_train_guard)">
-    <rect x="0" y="0" width="1280" height="380" fill="url(#bg_train_guard)"/>
-    <g filter="url(#blur_train_guard)">
 
-  <circle cx="180" cy="120" r="150" fill="#f87171" opacity="0.30">
-    <animateTransform attributeName="transform" type="translate" values="0 0; 40 16.0; 0 0" dur="60s" begin="0.0s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.6 1; 0.4 0 0.6 1" keyTimes="0;0.5;1"/>
-    <animate attributeName="opacity" values="0.18;0.42;0.18" dur="48.0s" begin="0.0s" repeatCount="indefinite"/>
-  </circle>
+  <rect width="1280" height="380" fill="url(#bgGrad)"/>
 
-  <circle cx="1080" cy="90" r="120" fill="#fbbf24" opacity="0.30">
-    <animateTransform attributeName="transform" type="translate" values="0 0; -30 -12.0; 0 0" dur="70s" begin="1.2s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.6 1; 0.4 0 0.6 1" keyTimes="0;0.5;1"/>
-    <animate attributeName="opacity" values="0.18;0.42;0.18" dur="56.0s" begin="1.2s" repeatCount="indefinite"/>
-  </circle>
-
-  <circle cx="980" cy="300" r="170" fill="#fca5a5" opacity="0.30">
-    <animateTransform attributeName="transform" type="translate" values="0 0; 50 20.0; 0 0" dur="55s" begin="0.6s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.6 1; 0.4 0 0.6 1" keyTimes="0;0.5;1"/>
-    <animate attributeName="opacity" values="0.18;0.42;0.18" dur="44.0s" begin="0.6s" repeatCount="indefinite"/>
-  </circle>
-
-  <circle cx="320" cy="320" r="110" fill="#fbbf24" opacity="0.30">
-    <animateTransform attributeName="transform" type="translate" values="0 0; -25 -10.0; 0 0" dur="65s" begin="2.0s" repeatCount="indefinite" calcMode="spline" keySplines="0.4 0 0.6 1; 0.4 0 0.6 1" keyTimes="0;0.5;1"/>
-    <animate attributeName="opacity" values="0.18;0.42;0.18" dur="52.0s" begin="2.0s" repeatCount="indefinite"/>
-  </circle>
-</g>
-    
-  <circle cx="320" cy="190" r="150" fill="none" stroke="#fca5a5" stroke-width="1.2" opacity="0.18" stroke-dasharray="6 14">
-    <animateTransform attributeName="transform" type="rotate" from="0 320 190" to="360 320 190" dur="40s" repeatCount="indefinite"/>
-  </circle>
-  <circle cx="320" cy="190" r="110" fill="none" stroke="#fca5a5" stroke-width="1" opacity="0.12"/>
-
-  <g opacity="0.12">
-    <rect x="-300" y="150" width="300" height="3" fill="#fca5a5" transform="rotate(-18 0 150)">
-      <animateTransform attributeName="transform" type="translate" values="-200 0; 1700 0" dur="9s" repeatCount="indefinite"/>
-    </rect>
-    <rect x="-300" y="250" width="220" height="2" fill="#fca5a5" transform="rotate(-18 0 250)">
-      <animateTransform attributeName="transform" type="translate" values="-200 0; 1700 0" dur="13s" begin="2s" repeatCount="indefinite"/>
+  <!-- (a) BANNER-WIDE MOTION: cyan guard-light sweep across the full width -->
+  <g>
+    <rect x="-220" y="0" width="220" height="380" fill="url(#beamGrad)" opacity="0">
+      <animate attributeName="x" values="-220;1500;-220" dur="8s" repeatCount="indefinite"/>
+      <animate attributeName="opacity" values="0;0.5;0" dur="8s" repeatCount="indefinite"/>
     </rect>
   </g>
-    <line x1="0" y1="0" x2="1280" y2="0" stroke="#fca5a5" stroke-width="1" opacity="0.05"/><line x1="0" y1="32" x2="1280" y2="32" stroke="#fca5a5" stroke-width="1" opacity="0.05"/><line x1="0" y1="64" x2="1280" y2="64" stroke="#fca5a5" stroke-width="1" opacity="0.05"/><line x1="0" y1="96" x2="1280" y2="96" stroke="#fca5a5" stroke-width="1" opacity="0.05"/><line x1="0" y1="128" x2="1280" y2="128" stroke="#fca5a5" stroke-width="1" opacity="0.05"/><line x1="0" y1="160" x2="1280" y2="160" stroke="#fca5a5" stroke-width="1" opacity="0.05"/><line x1="0" y1="192" x2="1280" y2="192" stroke="#fca5a5" stroke-width="1" opacity="0.05"/><line x1="0" y1="224" x2="1280" y2="224" stroke="#fca5a5" stroke-width="1" opacity="0.05"/><line x1="0" y1="256" x2="1280" y2="256" stroke="#fca5a5" stroke-width="1" opacity="0.05"/><line x1="0" y1="288" x2="1280" y2="288" stroke="#fca5a5" stroke-width="1" opacity="0.05"/><line x1="0" y1="320" x2="1280" y2="320" stroke="#fca5a5" stroke-width="1" opacity="0.05"/><line x1="0" y1="352" x2="1280" y2="352" stroke="#fca5a5" stroke-width="1" opacity="0.05"/>
-  <g transform="translate(0,0)"><rect x="0" y="0" width="1280" height="44" fill="#fca5a5" opacity="0.06"><animateTransform attributeName="transform" type="translate" values="0 -44; 0 380; 0 -44" dur="4.5s" repeatCount="indefinite" calcMode="spline" keySplines="0.45 0 0.55 1;0.45 0 0.55 1" keyTimes="0;0.5;1"/></rect></g>
-    <g transform="translate(1050,190)">
-    <path d="M0 -90 L70 -60 L70 20 Q70 80 0 100 Q-70 80 -70 20 L-70 -60 Z" fill="#1c1917" stroke="#fca5a5" stroke-width="4" opacity="0.95"/>
-    <path d="M0 -90 L70 -60 L70 20 Q70 80 0 100 Q-70 80 -70 20 L-70 -60 Z" fill="none" stroke="#fbbf24" stroke-width="2" opacity="0.5">
-      <animate attributeName="opacity" values="0.2;0.7;0.2" dur="3s" repeatCount="indefinite"/>
-    </path>
-    <path d="M-34 6 L-10 32 L40 -22" fill="none" stroke="#fbbf24" stroke-width="9" stroke-linecap="round" stroke-linejoin="round">
-      <animate attributeName="stroke-dashoffset" values="120;0;0" keyTimes="0;0.6;1" dur="2.2s" fill="freeze"/>
-      <animate attributeName="opacity" values="0;1;1" keyTimes="0;0.4;1" dur="2.2s" fill="freeze"/>
-    </path>
+  <g fill="#a5f3fc">
+    <circle cx="0" cy="100" r="2.2" opacity="0.6">
+      <animate attributeName="cx" values="-20;1320" dur="9.5s" repeatCount="indefinite"/>
+    </circle>
+    <circle cx="0" cy="300" r="1.8" opacity="0.5">
+      <animate attributeName="cx" values="1320;-20" dur="11.5s" repeatCount="indefinite"/>
+    </circle>
   </g>
-    
-  <line x1="80" y1="250" x2="440" y2="250" stroke="url(#g_train_guard)" stroke-width="4" stroke-linecap="round" stroke-dasharray="360" stroke-dashoffset="360">
-    <animate attributeName="stroke-dashoffset" values="360;0;0" keyTimes="0;0.55;1" dur="1.8s" fill="freeze"/>
-    <animate attributeName="opacity" values="0;1;1" keyTimes="0;0.2;1" dur="1.8s" fill="freeze"/>
+
+  <!-- (b) TITLE-SURROUND MOTION: pulsing halo + draw-on underline -->
+  <circle cx="290" cy="128" r="132" fill="url(#haloGrad)">
+    <animate attributeName="r" values="116;144;116" dur="4.4s" repeatCount="indefinite"/>
+    <animate attributeName="opacity" values="0.5;0.85;0.5" dur="4.4s" repeatCount="indefinite"/>
+  </circle>
+
+  <text x="62" y="134" font-family="'PingFang SC','Microsoft YaHei',sans-serif" font-size="54" font-weight="800" fill="url(#titleGrad)">Train Guard</text>
+  <line x1="64" y1="154" x2="290" y2="154" stroke="#38bdf8" stroke-width="4" stroke-linecap="round" stroke-dasharray="230" stroke-dashoffset="230">
+    <animate attributeName="stroke-dashoffset" values="230;0;0;230" keyTimes="0;0.5;0.85;1" dur="6s" repeatCount="indefinite"/>
   </line>
-    
-  <text x="80" y="200" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="66" font-weight="800" fill="url(#g_train_guard)" letter-spacing="-1">
-    <animateTransform attributeName="transform" type="translate" values="-40 12; 0 0; 0 0" keyTimes="0;0.5;1" dur="1.6s" fill="freeze" calcMode="spline" keySplines="0.34 1.56 0.64 1;0 0 1 1"/>
-    <animate attributeName="opacity" values="0;1;1" keyTimes="0;0.5;1" dur="1.6s" fill="freeze"/>
-    Train Guard
-  </text>
-  <text x="82" y="238" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="22" font-weight="500" fill="#fecaca">
-    <animate attributeName="opacity" values="0;0;1" keyTimes="0;0.5;1" dur="1.8s" fill="freeze"/>
-    LLM / VLM 训练守护 · 可靠观测与受控恢复
-  </text>
-      <g transform="translate(80,280)" opacity="0">
-    <rect x="0" y="0" width="49" height="28" rx="14" fill="#fbbf24" fill-opacity="0.14" stroke="#fca5a5" stroke-opacity="0.55" stroke-width="1"/>
-    <text x="24" y="19" text-anchor="middle" font-family="monospace" font-size="14" fill="#fecaca">LLM</text>
-    <animate attributeName="opacity" values="0;1" begin="0.95s" dur="0.5s" fill="freeze"/>
-    <animateTransform attributeName="transform" type="translate" values="80 292; 80 280" begin="0.95s" dur="0.55s" fill="freeze" calcMode="spline" keySplines="0.34 1.56 0.64 1;0 0 1 1" keyTimes="0;1"/>
+  <text x="64" y="188" font-family="'PingFang SC','Microsoft YaHei',sans-serif" font-size="19" font-weight="500" fill="#a5f3fc">LLM/VLM 训练守护 · 本地优先零依赖</text>
+
+  <g font-family="'PingFang SC','Microsoft YaHei',sans-serif" font-size="15" font-weight="600" fill="#a5f3fc">
+    <rect x="64" y="208" width="88" height="30" rx="15" fill="#0c2c3a"/>
+    <text x="84" y="228">训练检查</text>
+    <rect x="168" y="208" width="88" height="30" rx="15" fill="#0c2c3a"/>
+    <text x="188" y="228">可靠性</text>
+    <rect x="272" y="208" width="96" height="30" rx="15" fill="#0c2c3a"/>
+    <text x="292" y="228">受控恢复</text>
   </g>
-  <g transform="translate(141,280)" opacity="0">
-    <rect x="0" y="0" width="49" height="28" rx="14" fill="#fbbf24" fill-opacity="0.14" stroke="#fca5a5" stroke-opacity="0.55" stroke-width="1"/>
-    <text x="24" y="19" text-anchor="middle" font-family="monospace" font-size="14" fill="#fecaca">VLM</text>
-    <animate attributeName="opacity" values="0;1" begin="1.11s" dur="0.5s" fill="freeze"/>
-    <animateTransform attributeName="transform" type="translate" values="141 292; 141 280" begin="1.11s" dur="0.55s" fill="freeze" calcMode="spline" keySplines="0.34 1.56 0.64 1;0 0 1 1" keyTimes="0;1"/>
-  </g>
-  <g transform="translate(202,280)" opacity="0">
-    <rect x="0" y="0" width="40" height="28" rx="14" fill="#fbbf24" fill-opacity="0.14" stroke="#fca5a5" stroke-opacity="0.55" stroke-width="1"/>
-    <text x="20" y="19" text-anchor="middle" font-family="monospace" font-size="14" fill="#fecaca">守护</text>
-    <animate attributeName="opacity" values="0;1" begin="1.27s" dur="0.5s" fill="freeze"/>
-    <animateTransform attributeName="transform" type="translate" values="202 292; 202 280" begin="1.27s" dur="0.55s" fill="freeze" calcMode="spline" keySplines="0.34 1.56 0.64 1;0 0 1 1" keyTimes="0;1"/>
-  </g>
-    <text x="1240" y="356" text-anchor="end" font-family="'Segoe UI','Helvetica Neue',Arial,sans-serif" font-size="14" fill="#fecaca" opacity="0.55">made with &#10084; by Hyhyhyyy</text>
+
+  <!-- HERO MOTIF (right): a guardian shield watching the training heartbeat + checkpoint + alert -->
+  <g transform="translate(985,196)">
+    <!-- GPU chip (training process) -->
+    <g>
+      <animateTransform attributeName="transform" type="translate" values="0 0;0 -6;0 0" dur="4.6s" repeatCount="indefinite"/>
+      <rect x="-150" y="-44" width="74" height="74" rx="10" fill="#0e3a4a" stroke="#22d3ee" stroke-width="2"/>
+      <rect x="-132" y="-26" width="38" height="38" rx="6" fill="#0c2230"/>
+      <g fill="#22d3ee">
+        <rect x="-150" y="-30" width="6" height="10"/><rect x="-150" y="-12" width="6" height="10"/><rect x="-150" y="6" width="6" height="10"/>
+        <rect x="-80" y="-30" width="6" height="10"/><rect x="-80" y="-12" width="6" height="10"/><rect x="-80" y="6" width="6" height="10"/>
+      </g>
+    </g>
+    <!-- guardian shield -->
+    <g transform="translate(20,0)">
+      <g>
+        <animateTransform attributeName="transform" type="scale" values="1 1;1.04 1.04;1 1" dur="3.4s" repeatCount="indefinite"/>
+        <path d="M-46,-66 L46,-66 L46,4 Q46,54 0,78 Q-46,54 -46,4 Z" fill="url(#shieldGrad)" opacity="0.95"/>
+        <path d="M-46,-66 L46,-66 L46,4 Q46,54 0,78 Q-46,54 -46,4 Z" fill="none" stroke="#a5f3fc" stroke-width="3"/>
+        <!-- heartbeat / loss curve -->
+        <polyline points="-30,8 -12,8 -4,-16 4,26 12,8 30,8" fill="none" stroke="#052b33" stroke-width="3.5" stroke-linecap="round" stroke-linejoin="round"/>
+        <circle r="4.5" fill="#052b33">
+          <animateMotion dur="2.6s" repeatCount="indefinite" path="M-30,8 L-12,8 L-4,-16 L4,26 L12,8 L30,8"/>
+        </circle>
+      </g>
+    </g>
+    <!-- checkpoint flag -->
+    <g>
+      <animateTransform attributeName="transform" type="rotate" values="-4 96 -52;4 96 -52;-4 96 -52" dur="3s" repeatCount="indefinite"/>
+      <line x1="96" y1="-92" x2="96" y2="-30" stroke="#34d399" stroke-width="4" stroke-linecap="round"/>
+      <path d="M96,-92 L132,-82 L96,-72 Z" fill="#34d399"/>
+    </g>
+    <!-- alert bell -->
+    <g>
+      <animate attributeName="opacity" values="0.7;1;0.7" dur="2.4s" repeatCount="indefinite"/>
+      <path d="M-96,40 a14,14 0 0 1 28,0 Z" fill="none" stroke="#fbbf24" stroke-width="3.5" stroke-linecap="round"/>
+      <path d="M-82,40 L-82,46 M-82,52 a3,3 0 1 1 0,0.1" stroke="#fbbf24" stroke-width="3.5" fill="none" stroke-linecap="round"/>
+    </g>
   </g>
 </svg>
