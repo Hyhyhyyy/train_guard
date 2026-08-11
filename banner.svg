@@ -35,11 +35,6 @@
     <g>
       <animateTransform attributeName="transform" type="scale" values="1;1.05;1" dur="3.2s" repeatCount="indefinite" calcMode="spline" keySplines="0.45 0 0.55 1;0.45 0 0.55 1"/>
       <path d="M0,-80 C46,-80 78,-54 78,-10 C78,46 34,74 0,88 C-34,74 -78,46 -78,-10 C-78,-54 -46,-80 0,-80 Z" fill="url(#shield)" stroke="#bfdbfe" stroke-width="9"/>
-      <circle cx="-24" cy="-14" r="10" fill="#ffffff"/>
-      <circle cx="24" cy="-14" r="10" fill="#ffffff"/>
-      <circle cx="-24" cy="-12" r="5" fill="#1e3a8a"/>
-      <circle cx="24" cy="-12" r="5" fill="#1e3a8a"/>
-      <path d="M-18,14 Q0,30 18,14" fill="none" stroke="#bfdbfe" stroke-width="6" stroke-linecap="round"/>
       <path d="M-56,42 L-34,42 L-22,18 L-8,60 L6,30 L18,42 L56,42" fill="none" stroke="#34d399" stroke-width="6" stroke-linecap="round" stroke-linejoin="round" stroke-dasharray="220">
         <animate attributeName="stroke-dashoffset" values="220;0;0;220" keyTimes="0;0.5;0.8;1" dur="3.2s" repeatCount="indefinite"/>
       </path>
