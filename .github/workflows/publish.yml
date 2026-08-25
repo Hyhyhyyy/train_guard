@@ -39,13 +39,15 @@ jobs:
         run: |
           python - <<'PY'
           import os
+          from importlib.metadata import version
           from pathlib import Path
-          import train_guard
-          expected = "v" + train_guard.__version__
+
+          package_version = version("llm-train-guard")
+          expected = "v" + package_version
           assert os.environ["RELEASE_TAG"] == expected, (os.environ["RELEASE_TAG"], expected)
-          assert "rc" in train_guard.__version__, "publish.yml only creates prereleases"
+          assert "rc" in package_version, "publish.yml only creates prereleases"
           for name in ("README.md", "README_zh-CN.md", "CHANGELOG.md", "docs/RELEASE.md"):
-              assert train_guard.__version__ in Path(name).read_text(encoding="utf-8"), name
+              assert package_version in Path(name).read_text(encoding="utf-8"), name
           PY
       - name: Run full quality and test gates
         run: |
