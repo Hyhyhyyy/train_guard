@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 import json
+import sys
 from pathlib import Path
+
+ROOT = Path(__file__).resolve().parents[1]
+sys.path.insert(0, str(ROOT))
 
 from benchmarks.evaluate import evaluate, read_jsonl, run_train_guard_rules
 from benchmarks.generate import generate
-
-
-ROOT = Path(__file__).resolve().parents[1]
 
 
 def test_tracked_benchmark_reference_matches_rules(tmp_path: Path) -> None:
