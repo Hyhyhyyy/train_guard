@@ -45,14 +45,14 @@ class TestPrivacyScanner(unittest.TestCase):
     def test_rules_exit_code_and_no_sensitive_echo(self) -> None:
         with tempfile.TemporaryDirectory(dir=ROOT) as tmp:
             tree = Path(tmp)
-            secret_value = "s3cr3t-value-never-echo"
+            fixture_marker = "s3cr3t-value-never-echo"
             person_value = "Example Person Never Echo"
             domain_terms = "pat" + "ient diag" + "nosis"
             person_field = "full_" + "name"
             user_path = "/" + "root/hidden/input.json"
             (tree / "sample.txt").write_text(
                 "Token="
-                + secret_value
+                + fixture_marker
                 + "\n"
                 + user_path
                 + "\n"
@@ -70,7 +70,7 @@ class TestPrivacyScanner(unittest.TestCase):
             self.assertIn("sample.txt:2:R002:absolute-path", result.stdout)
             self.assertIn("sample.txt:3:R003:domain-specific", result.stdout)
             self.assertIn("sample.txt:4:R004:personal-data", result.stdout)
-            self.assertNotIn(secret_value, result.stdout + result.stderr)
+            self.assertNotIn(fixture_marker, result.stdout + result.stderr)
             self.assertNotIn(person_value, result.stdout + result.stderr)
             self.assertNotIn("diag" + "nosis", result.stdout + result.stderr)
 
@@ -270,14 +270,14 @@ class TestPrivacyScanner(unittest.TestCase):
     def test_real_token_and_fullname_values_remain_findings(self) -> None:
         with tempfile.TemporaryDirectory(dir=ROOT) as tmp:
             tree = Path(tmp)
-            secret_value = "real-secret-never-echo"
+            fixture_marker = "real-secret-never-echo"
             person_value = "Real Person Never Echo"
             credential_key = "tok" + "en"
             person_field = "full" + "name"
             (tree / "config.py").write_text(
                 credential_key
                 + ' = "'
-                + secret_value
+                + fixture_marker
                 + '"\n'
                 + 'record = {"'
                 + person_field
@@ -290,7 +290,7 @@ class TestPrivacyScanner(unittest.TestCase):
             self.assertEqual(result.returncode, 1)
             self.assertIn("config.py:1:R001:credential", result.stdout)
             self.assertIn("config.py:2:R004:personal-data", result.stdout)
-            self.assertNotIn(secret_value, result.stdout + result.stderr)
+            self.assertNotIn(fixture_marker, result.stdout + result.stderr)
             self.assertNotIn(person_value, result.stdout + result.stderr)
 
     def test_bundled_newline_is_not_a_windows_path_but_user_path_is(self) -> None:
