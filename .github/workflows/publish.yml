@@ -73,6 +73,7 @@ jobs:
           PYTHONPATH: ""
         run: |
           python -m venv wheel-smoke
+          wheel-smoke/bin/python -m pip install --upgrade pip
           wheel-smoke/bin/python -m pip install --force-reinstall --no-deps dist/*.whl
           wheel-smoke/bin/train-guard --version
           wheel-smoke/bin/train-guard --help
