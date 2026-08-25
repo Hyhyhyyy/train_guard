@@ -35,17 +35,15 @@ Review both generated diffs. `release/train_guard.py` is generated and never han
 3. Run full pytest, Ruff, mypy, privacy scans, manifest validation, build, metadata checks,
    isolated wheel smoke, dependency audit, and sdist-boundary tests.
 4. Tag exactly `v0.6.0rc1`.
-5. The publish workflow repeats all gates, publishes through PyPI trusted publishing, and
-   creates a GitHub prerelease with all artifacts.
+5. The publish workflow repeats all gates and creates a GitHub prerelease with all artifacts.
 
-Before tagging, a maintainer must configure a PyPI project named `train-guard`, add a trusted
-publisher for this repository's `publish.yml` workflow and `pypi` environment, and configure
-that protected GitHub environment. These external settings cannot be verified from the
-repository. Missing or mismatched trusted-publisher settings block PyPI publication.
+The `train-guard` project name on PyPI is owned by an unrelated project. Do not publish this
+distribution to that PyPI name or tell users to install it from PyPI. Until a distinct package
+name is selected and reviewed, GitHub prerelease artifacts and explicit source installation are
+the supported distribution channels.
 
-GitHub Actions and third-party actions are pinned. The release job requires OIDC
-`id-token: write` for PyPI and `contents: write` for the GitHub prerelease; no other workflow
-job receives those write permissions.
+GitHub Actions and third-party actions are pinned. The release job requires only
+`contents: write` for the GitHub prerelease; no other workflow job receives write permissions.
 
 ## Verification
 

@@ -19,17 +19,9 @@ Train Guard 是面向 LLM/VLM 训练的本地优先可靠性工具，提供检�
 
 ## 安装
 
-任选一种方式：
+PyPI 上的 `train-guard` 名称目前属于另一个无关项目。请从本仓库源码安装，明确软件来源：
 
 ```bash
-# 隔离 CLI（推荐）
-pipx install train-guard==0.6.0rc1
-uv tool install train-guard==0.6.0rc1
-
-# 当前 Python 环境
-python -m pip install train-guard==0.6.0rc1
-
-# 源码安装
 git clone https://github.com/Hyhyhyyy/train_guard.git
 cd train_guard
 python -m pip install -e .
@@ -38,16 +30,15 @@ python -m pip install -e .
 可选 extras 为 `yaml`、`image`、`psutil`、`tui` 和 `all`：
 
 ```bash
-python -m pip install "train-guard[all]==0.6.0rc1"
-python -m pip install "train-guard[tui]==0.6.0rc1"
+python -m pip install -e ".[all]"
+python -m pip install -e ".[tui]"
 ```
 
-升级或卸载：
+更新或卸载源码安装：
 
 ```bash
-pipx upgrade train-guard              # 或：uv tool upgrade train-guard
-python -m pip install --upgrade train-guard
-pipx uninstall train-guard            # 或：uv tool uninstall train-guard
+git pull --ff-only
+python -m pip install -e ".[all]"
 python -m pip uninstall train-guard
 ```
 

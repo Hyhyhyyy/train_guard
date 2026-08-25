@@ -17,9 +17,8 @@ class TestReleaseEngineering(unittest.TestCase):
         chinese = (ROOT / "README_zh-CN.md").read_text(encoding="utf-8")
         shared = (
             "0.6.0rc1",
-            "pipx install",
-            "uv tool install",
-            "train-guard[all]",
+            "git clone https://github.com/Hyhyhyyy/train_guard.git",
+            'python -m pip install -e ".[all]"',
             "train-guard run supervise",
             "train-guard show",
             "docs/CLI.md",

@@ -48,6 +48,8 @@ alerts, and explicitly controlled recovery. The core has no required dependencie
 Observation is the default: it does not install packages, upload telemetry, stop training,
 or modify training data.
 
+Current source release candidate: **0.6.0rc1**.
+
 ## Capabilities at a glance
 
 - **Before training:** environment, GPU, dependency, model-path, dataset, media, and split checks.
@@ -59,17 +61,10 @@ or modify training data.
 
 ## Install
 
-Choose one method:
+The `train-guard` name on PyPI currently belongs to an unrelated project. Install this
+repository from source so that the package origin is explicit:
 
 ```bash
-# Isolated CLI (recommended)
-pipx install train-guard==0.6.0rc1
-uv tool install train-guard==0.6.0rc1
-
-# Current Python environment
-python -m pip install train-guard==0.6.0rc1
-
-# Source checkout
 git clone https://github.com/Hyhyhyyy/train_guard.git
 cd train_guard
 python -m pip install -e .
@@ -78,16 +73,15 @@ python -m pip install -e .
 Optional extras are `yaml`, `image`, `psutil`, `tui`, and `all`:
 
 ```bash
-python -m pip install "train-guard[all]==0.6.0rc1"
-python -m pip install "train-guard[tui]==0.6.0rc1"
+python -m pip install -e ".[all]"
+python -m pip install -e ".[tui]"
 ```
 
-Upgrade or remove with the tool used to install:
+Update or remove the source installation with the same interpreter:
 
 ```bash
-pipx upgrade train-guard              # or: uv tool upgrade train-guard
-python -m pip install --upgrade train-guard
-pipx uninstall train-guard            # or: uv tool uninstall train-guard
+git pull --ff-only
+python -m pip install -e ".[all]"
 python -m pip uninstall train-guard
 ```
 

@@ -49,9 +49,10 @@ scan. `MANIFEST.in` separately constrains the sdist, while
 The version is declared once as `train_guard.__version__`; packaging reads it dynamically.
 CI tests the supported operating systems and Python versions, checks quality and coverage,
 builds wheel and source distributions, audits dependencies, regenerates the single file, rejects
-drift, and runs smoke and contract gates. Tagged release candidates use PyPI trusted
-publishing and become GitHub prereleases with wheel, sdist, single-file, checksums, and SBOM.
-Repository code cannot verify the external PyPI trusted-publisher configuration.
+drift, and runs smoke and contract gates. Tagged release candidates become GitHub prereleases
+with wheel, sdist, single-file, checksums, and SBOM. PyPI publishing is disabled because the
+`train-guard` project name there belongs to an unrelated project; selecting a distinct package
+name is a separate release decision.
 
 Deprecated aliases `precheck`, `monitor`, `postcheck`, and `evaluate` are a governance
 exception for the 0.6.0 candidate cycle only and are scheduled for removal in 0.6.0 final.

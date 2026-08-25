@@ -16,15 +16,11 @@ env:
 
 jobs:
   publish:
-    name: Gate, build, publish, and create prerelease
+    name: Gate, build, and create prerelease
     runs-on: ubuntu-latest
     timeout-minutes: 30
-    environment:
-      name: pypi
-      url: https://pypi.org/p/train-guard
     permissions:
       contents: write
-      id-token: write
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4.3.1
         with:
@@ -91,8 +87,6 @@ jobs:
             --output-file release-assets/train-guard-${GITHUB_REF_NAME#v}.sbom.json
           cd release-assets
           sha256sum *.whl *.tar.gz train_guard.py *.sbom.json > SHA256SUMS
-      - name: Publish distributions with PyPI trusted publishing
-        uses: pypa/gh-action-pypi-publish@6733eb7d741f0b11ec6a39b58540dab7590f9b7d # v1.14.0
       - name: Create GitHub prerelease with verified artifacts
         env:
           GH_TOKEN: ${{ github.token }}
