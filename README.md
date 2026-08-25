@@ -2,41 +2,6 @@
   <img src="banner.svg" alt="Train Guard LLM/VLM Training Toolkit" width="100%">
 </p>
 
-<div align="center">
-
-![CI](https://img.shields.io/badge/CI-passing-success?link=https%3A%2F%2Fgithub.com%2FHyhyhyyy%2Ftrain_guard%2Factions%2Fworkflows%2Fci.yml)
-![Python](https://img.shields.io/badge/python-3.10--3.14-blue?link=https%3A%2F%2Fwww.python.org%2F)
-![License](https://img.shields.io/badge/License-Apache--2.0-blue?link=LICENSE)
-
-**LLM/VLM 训练守护 · 可靠观测与受控恢复**
-
-[简体中文](README_zh-CN.md) · [CLI Reference](docs/CLI.md) · [Configuration](docs/CONFIGURATION.md) · [Reliability](docs/RELIABILITY.md) · [Architecture](ARCHITECTURE.md)
-
-</div>
-
-
----
-
-
-## ✨ Capabilities at a Glance
-
-| 特性 | 说明 |
-|------|------|
-| 🔍 **训练前检查** | 环境、GPU、依赖、模型路径、数据集、媒体文件全面检查 |
-| 👁️ **训练中观测** | 生命周期、日志、Loss、GPU、磁盘、检查点、进程监控 |
-| 🛡️ **可靠性保障** | 结构化事件、去重告警、持久状态、有界恢复 |
-| ✅ **训练后校验** | 输出验收、运行对比、评估、SHA256 清单 |
-| 🖥️ **多端接口** | CLI、Python API、HF Callback、Web Dashboard、SSH TUI |
-| 📦 **零依赖核心** | 无必需依赖的单文件发布，checksum 校验 |
-
-## 🔄 工作流概览
-
-<p align="center"><img src="diagrams/train_guard.svg" alt="Train Guard Workflow" width="95%"></p>
-
-
----
-
-
 [![CI](https://github.com/Hyhyhyyy/train_guard/actions/workflows/ci.yml/badge.svg)](https://github.com/Hyhyhyyy/train_guard/actions/workflows/ci.yml)
 [![Python 3.10–3.14](https://img.shields.io/badge/python-3.10--3.14-blue)](https://www.python.org/)
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache--2.0-blue)](LICENSE)
@@ -50,6 +15,10 @@ or modify training data.
 
 Current source release candidate: **0.6.0rc1**.
 
+**Why it exists:** training failures are often discovered after expensive runs, while many
+monitoring tools either require a hosted control plane or blur observation and control. Train
+Guard keeps evidence local and makes every control path explicit, bounded, and auditable.
+
 ## Capabilities at a glance
 
 - **Before training:** environment, GPU, dependency, model-path, dataset, media, and split checks.
@@ -59,10 +28,26 @@ Current source release candidate: **0.6.0rc1**.
 - **Interfaces:** CLI, Python API, Hugging Face callback, loopback Web dashboard, and SSH TUI.
 - **Delivery:** zero-required-dependency core plus a generated, checksummed single-file release.
 
+<p align="center"><img src="diagrams/train_guard.svg" alt="Train Guard workflow" width="95%"></p>
+
+## Reproducible evidence
+
+The public CPU-only fault-injection benchmark covers 15 synthetic failure scenarios plus a
+healthy negative. With fixed seed `20260724`, the in-tree adapter detects all 15 expected faults
+with no false positives. This verifies the deterministic rule/fixture contract—not real-world
+GPU accuracy or production savings. [Inspect and reproduce the result](benchmarks/README.md).
+
 ## Install
 
-The `train-guard` name on PyPI currently belongs to an unrelated project. Install this
-repository from source so that the package origin is explicit:
+The distribution is named `llm-train-guard`; the command remains `train-guard`. For the current
+release candidate, install the verified GitHub Release wheel:
+
+```bash
+python -m pip install "llm-train-guard[all] @ https://github.com/Hyhyhyyy/train_guard/releases/download/v0.6.0rc1/llm_train_guard-0.6.0rc1-py3-none-any.whl"
+train-guard --version
+```
+
+For development, install from source:
 
 ```bash
 git clone https://github.com/Hyhyhyyy/train_guard.git
@@ -82,7 +67,7 @@ Update or remove the source installation with the same interpreter:
 ```bash
 git pull --ff-only
 python -m pip install -e ".[all]"
-python -m pip uninstall train-guard
+python -m pip uninstall llm-train-guard
 ```
 
 ## Three-minute workflow
@@ -186,16 +171,15 @@ Stable process results are: `0` PASS, `1` WARN, `2` FAIL, `3` usage error,
 - [Release process and artifacts](docs/RELEASE.md)
 - [Migration and one-candidate alias window](docs/MIGRATION.md)
 - [Architecture](ARCHITECTURE.md)
+- [Promotion and evidence guide](docs/PROMOTION.md)
 - [Contributing](CONTRIBUTING.md), [security](SECURITY.md), and [support](SUPPORT.md)
 - [Changelog](CHANGELOG.md)
 
+## Community
+
+Real training-workflow feedback is more valuable than generic feature requests. Open a
+[bug report](https://github.com/Hyhyhyyy/train_guard/issues/new?template=bug_report.yml), propose
+a scoped feature, or read [CONTRIBUTING.md](CONTRIBUTING.md). Never attach private datasets,
+credentials, raw training reports, or machine-specific paths.
+
 Licensed under the Apache License 2.0; see [LICENSE](LICENSE).
-
-
----
-
-<div align="center">
-
-Licensed under the Apache License 2.0 · see [LICENSE](LICENSE)
-
-</div>

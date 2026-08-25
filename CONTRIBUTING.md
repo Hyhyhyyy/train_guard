@@ -45,8 +45,8 @@ instructions change, and add a changelog entry for release-visible changes. Gene
 `release/train_guard.py` may only change through `scripts/bundle_singlefile.py`.
 When that generated candidate intentionally changes, regenerate
 `configs/release_manifest.json` with `python scripts/check_release_manifest.py --generate`,
-review both diffs, then run validation again. Do not add a `tui` extra until a supported TUI
-implementation and tests exist. See [docs/RELEASE.md](docs/RELEASE.md) for the complete gates
-and external trusted-publisher prerequisites.
+review both diffs, then run validation again. Keep optional interfaces, including the TUI,
+behind explicit extras with clear failure messages. See [docs/RELEASE.md](docs/RELEASE.md)
+for the complete gates and release-channel boundary.
 
 All contributions are licensed under Apache License 2.0.

@@ -49,7 +49,7 @@ def run_tui(
         from textual.widgets import Footer, Header, Static
     except ImportError as exc:
         raise RuntimeError(
-            'terminal UI requires the optional dependency: pip install "train-guard[tui]"'
+            'terminal UI requires the optional dependency: pip install "llm-train-guard[tui]"'
         ) from exc
 
     store = StateStore(state_db)

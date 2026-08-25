@@ -37,10 +37,10 @@ Review both generated diffs. `release/train_guard.py` is generated and never han
 4. Tag exactly `v0.6.0rc1`.
 5. The publish workflow repeats all gates and creates a GitHub prerelease with all artifacts.
 
-The `train-guard` project name on PyPI is owned by an unrelated project. Do not publish this
-distribution to that PyPI name or tell users to install it from PyPI. Until a distinct package
-name is selected and reviewed, GitHub prerelease artifacts and explicit source installation are
-the supported distribution channels.
+The `train-guard` project name on PyPI is owned by an unrelated project. The distribution name
+is therefore `llm-train-guard`; the import package remains `train_guard` and the CLI remains
+`train-guard`. GitHub prerelease artifacts and explicit source installation are the supported
+distribution channels until the maintainer registers and configures the distinct PyPI project.
 
 GitHub Actions and third-party actions are pinned. The release job requires only
 `contents: write` for the GitHub prerelease; no other workflow job receives write permissions.

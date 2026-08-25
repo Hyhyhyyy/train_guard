@@ -8,6 +8,8 @@
 
 Train Guard 是面向 LLM/VLM 训练的本地优先可靠性工具，提供检查、监控、告警、可视化和显式受控恢复。核心安装没有必选依赖。默认只观察：不会自动安装包、上传遥测、停止训练或修改训练数据。
 
+它解决的核心问题是：昂贵训练往往在很晚才暴露数据、环境或检查点故障，而很多监控方案依赖托管控制面，或混淆“观察”与“控制”。Train Guard 将证据保留在本地，并让每条控制路径都显式、有限且可审计。
+
 ## 功能概览
 
 - **训练前：**检查环境、GPU、依赖、模型路径、数据、媒体文件和数据划分。
@@ -17,9 +19,23 @@ Train Guard 是面向 LLM/VLM 训练的本地优先可靠性工具，提供检�
 - **使用界面：**CLI、Python API、Hugging Face 回调、本地 Web 面板和 SSH TUI。
 - **交付方式：**核心零必选依赖，同时提供经过校验的单文件发行版。
 
+## 可复现证据
+
+公开的 CPU 合成故障 benchmark 覆盖 15 类故障和一个健康负例。使用固定种子 `20260724`，
+仓库内规则适配器检出全部 15 类预期故障且无误报。该结果验证的是确定性规则与夹具契约，
+不代表真实 GPU 环境准确率或生产节省。[查看并复现结果](benchmarks/README.md)。
+
 ## 安装
 
-PyPI 上的 `train-guard` 名称目前属于另一个无关项目。请从本仓库源码安装，明确软件来源：
+发行包名为 `llm-train-guard`，命令仍为 `train-guard`。当前候选版可安装经过发布门禁的
+GitHub Release wheel：
+
+```bash
+python -m pip install "llm-train-guard[all] @ https://github.com/Hyhyhyyy/train_guard/releases/download/v0.6.0rc1/llm_train_guard-0.6.0rc1-py3-none-any.whl"
+train-guard --version
+```
+
+开发时从源码安装：
 
 ```bash
 git clone https://github.com/Hyhyhyyy/train_guard.git
@@ -39,7 +55,7 @@ python -m pip install -e ".[tui]"
 ```bash
 git pull --ff-only
 python -m pip install -e ".[all]"
-python -m pip uninstall train-guard
+python -m pip uninstall llm-train-guard
 ```
 
 ## 三分钟流程
@@ -125,7 +141,13 @@ train-guard show --enable-control --state-db ./guard.sqlite
 - [发行工程与产物](docs/RELEASE.md)
 - [迁移与一个候选周期的别名窗口](docs/MIGRATION.md)
 - [架构](ARCHITECTURE.md)
+- [推广与证据指南](docs/PROMOTION.md)
 - [贡献](CONTRIBUTING.md)、[安全](SECURITY.md)和[支持](SUPPORT.md)
 - [变更日志](CHANGELOG.md)
+
+## 社区参与
+
+真实训练流程反馈比泛泛的功能建议更有价值。可以提交 Bug、提出范围清晰的功能建议或阅读
+[CONTRIBUTING.md](CONTRIBUTING.md)。请勿附带私有数据集、凭据、原始训练报告或机器路径。
 
 采用 Apache License 2.0；参见 [LICENSE](LICENSE)。

@@ -1,0 +1,23 @@
+{
+  "benchmark_version": "1.0.0",
+  "seed": 20260724,
+  "scope": "synthetic CPU-only fault-injection benchmark",
+  "counts": {
+    "expected_faults": 15,
+    "false_negatives": 0,
+    "false_positives": 0,
+    "true_positives": 15
+  },
+  "detection": {
+    "mttd_seconds": 0.0,
+    "precision": 1.0,
+    "recall": 1.0
+  },
+  "false_positives_per_1000_training_hours": 0.0,
+  "observed_training_hours": 2.6666666666666665,
+  "limitations": [
+    "The scenarios are synthetic and evaluated at the first detectable sample.",
+    "The result does not measure GPU-hour savings, production recovery success, or real hardware overhead.",
+    "Real-workload validation is required before making production-impact claims."
+  ]
+}

@@ -51,8 +51,9 @@ CI tests the supported operating systems and Python versions, checks quality and
 builds wheel and source distributions, audits dependencies, regenerates the single file, rejects
 drift, and runs smoke and contract gates. Tagged release candidates become GitHub prereleases
 with wheel, sdist, single-file, checksums, and SBOM. PyPI publishing is disabled because the
-`train-guard` project name there belongs to an unrelated project; selecting a distinct package
-name is a separate release decision.
+`train-guard` project name there belongs to an unrelated project. The distribution therefore
+uses the distinct name `llm-train-guard`, while the import package remains `train_guard` and the
+CLI remains `train-guard`.
 
 Deprecated aliases `precheck`, `monitor`, `postcheck`, and `evaluate` are a governance
 exception for the 0.6.0 candidate cycle only and are scheduled for removal in 0.6.0 final.

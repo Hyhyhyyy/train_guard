@@ -24,7 +24,7 @@ With `--enable-control`, it prints an in-memory token once and accepts only loca
 allowlisted commands for processes registered by `run supervise --enable-control`. Available
 capabilities are negotiated per process: pause, resume, graceful stop, terminate, and validated
 restart. Creating a checkpoint is framework-specific and is not a control action. Never expose
-the dashboard through a public proxy. Install `train-guard[tui]` and run `train-guard tui
+the dashboard through a public proxy. Install `llm-train-guard[tui]` and run `train-guard tui
 --state-db PATH` for the SSH-friendly terminal view.
 
 ## Unified launch workflow

@@ -21,6 +21,24 @@ adapter. That import is delayed until the flag is used. Generation, data
 formats, and evaluation do not depend on unfinished Train Guard modules.
 External detectors only need to emit the `alert` interface in `schema.json`.
 
+## Reproducible reference result
+
+The in-tree rule adapter was evaluated with seed `20260724` and detected all 15 synthetic
+fault scenarios with no false positives in the healthy negative. The machine-readable snapshot
+is tracked at [`results/reference-20260724.json`](results/reference-20260724.json).
+
+Reproduce it with:
+
+```console
+python -m benchmarks.generate --output-dir benchmark-output --seed 20260724 --json
+python -m benchmarks.evaluate --telemetry benchmark-output/telemetry.jsonl \
+  --expected benchmark-output/expected_alerts.jsonl --use-train-guard-rules \
+  --output benchmark-output/result.json
+```
+
+This is a deterministic, CPU-only contract benchmark. Its perfect result demonstrates rule and
+fixture agreement, not real-world production accuracy. See the claim limitation below.
+
 ## Data and schema
 
 Every line in `telemetry.jsonl` and `expected_alerts.jsonl` is an independent

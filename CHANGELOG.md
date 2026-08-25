@@ -2,6 +2,10 @@
 
 ## 0.6.0rc1
 
+- Rename the installable distribution to `llm-train-guard` to avoid the unrelated PyPI
+  project named `train-guard`; keep the `train_guard` import and `train-guard` CLI stable.
+- Add a tracked, reproducible synthetic benchmark result and document strict claim limitations.
+- Add promotion-ready positioning, proof points, and community launch guidance.
 - Add cross-platform quality, packaging, dependency-audit, and release gates.
 - Establish dynamic package version metadata, development tooling, and community governance.
 - Restrict source privacy scans to Git-tracked files and require exact binary exemptions.
