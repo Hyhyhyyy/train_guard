@@ -182,4 +182,8 @@ Real training-workflow feedback is more valuable than generic feature requests. 
 a scoped feature, or read [CONTRIBUTING.md](CONTRIBUTING.md). Never attach private datasets,
 credentials, raw training reports, or machine-specific paths.
 
+Release priorities and the acceptance criteria for 1.0 are tracked in
+[ROADMAP.md](ROADMAP.md). Usage and design questions belong in
+[GitHub Discussions](https://github.com/Hyhyhyyy/train_guard/discussions).
+
 Licensed under the Apache License 2.0; see [LICENSE](LICENSE).
